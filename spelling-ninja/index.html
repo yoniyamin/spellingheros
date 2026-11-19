@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spelling Heroes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="c" tabindex="0"></canvas>
+
+<div id="hud">
+  <div id="stats" class="chip">🪙 <span id="coins">0</span> &nbsp; ⭐ <span id="stars">0</span> &nbsp; Lv <span id="lvl">1</span>
+    <button id="pauseBtn" class="hb" data-act="start" title="Pause">⏸</button></div>
+  <div id="wordbox"><div id="emoji"></div><div id="blanks"></div><button id="speak" data-act="R1" title="Hear the word again">🔊</button></div>
+  <div id="bossbox" class="chip"><div id="bossName"></div><div id="hearts"></div></div>
+  <div id="combo"></div>
+  <div id="hintbar" class="chip"></div>
+  <div id="sticker"><div class="e"></div><div class="w"></div><div class="s"></div></div>
+</div>
+<div id="flash"></div><div id="toast"></div><div id="callout"></div>
+<div id="banner"><small></small><b></b></div>
+<div id="prompt" class="chip">Press <span class="b-x">✕</span> or click to open the chest!</div>
+<div id="pad" class="chip"></div>
+
+<div id="title" class="screen show">
+  <div class="deco">⚔️ 🐉 ⭐ 🔥 👑</div>
+  <h1>Spelling<br><span>Heroes</span></h1>
+  <div class="sub">Spell the word, beat the boss!</div>
+  <div class="press">Press <span class="b-x">✕</span> or click to start</div>
+</div>
+
+<div id="select" class="screen">
+  <div id="menubar">
+    <button class="mb" data-act="words">📝 Words</button>
+    <button class="mb" data-act="Y">👗 Wardrobe</button>
+    <button class="mb" data-act="X">🏆 Trophies</button>
+    <button class="mb" data-act="music" id="mbMusic">🎵 Music: On</button>
+    <button class="mb" data-act="gfx" id="mbGfx">✨ Graphics</button>
+  </div>
+  <div class="top">Choose your hero!</div>
+  <div class="chip herochip">
+    <button class="arrow" data-act="left" title="previous hero">◀</button>
+    <div class="hinfo"><div id="heroName"></div><div id="heroDesc"></div></div>
+    <button class="arrow" data-act="right" title="next hero">▶</button>
+  </div>
+  <button class="btn lg go" data-act="A">▶ PLAY!</button>
+  <div class="keys chip">◀ ▶ choose &nbsp;·&nbsp; <span class="b-x">✕</span> play &nbsp;·&nbsp; <span class="b-t">△</span> wardrobe &nbsp;·&nbsp; <span class="b-s">□</span> trophies &nbsp;·&nbsp; L1 words &nbsp;·&nbsp; or click the hero!</div>
+</div>
+
+<div id="shop" class="screen">
+  <div class="panel">
+    <h2>👗 Wardrobe &nbsp; 🪙 <span id="shopCoins">0</span></h2>
+    <div class="grid" id="shopGrid" style="grid-template-columns:repeat(6,1fr)"></div>
+    <div id="shopInfo"></div>
+    <div class="btnrow"><button class="btn go" id="shopAct" data-act="A">Buy</button><button class="btn" data-act="B">◀ Back</button></div>
+    <div class="keys">◀ ▶ ▲ ▼ choose &nbsp;·&nbsp; <span class="b-x">✕</span> buy / wear / take off &nbsp;·&nbsp; <span class="b-o">○</span> back &nbsp;·&nbsp; click an item twice to buy / wear it</div>
+  </div>
+</div>
+
+<div id="locker" class="screen">
+  <div class="panel">
+    <h2>🏆 Trophy Locker <span id="lockerCount" style="font-size:.6em"></span></h2>
+    <div class="grid" id="lockerGrid"></div>
+    <div class="btnrow"><button class="btn" data-act="B">◀ Back</button></div>
+  </div>
+</div>
+
+<div id="words" class="screen">
+  <div class="panel wide">
+    <h2>📝 My Spelling Words <span style="font-size:.55em">(<span id="wCount">0</span>)</span></h2>
+    <div class="wl-add">
+      <input id="wIn" placeholder="Type a word - or many: cat, dog, sun" maxlength="300" autocomplete="off" spellcheck="false">
+      <input id="eIn" placeholder="🙂" maxlength="8" title="Picture for the word (an emoji). Leave empty to pick one automatically.">
+      <button class="btn go" data-wact="add">➕ Add</button>
+    </div>
+    <div id="wList" class="wl-list"></div>
+    <div class="wl-row"><span class="lbl">Word packs:</span> <span id="packs"></span></div>
+    <div class="wl-row"><span class="lbl">Words per boss:</span> <button class="btn sm" data-wact="per-">−</button> <b id="perN">5</b> <button class="btn sm" data-wact="per+">+</button>
+      &nbsp; <button class="btn sm warn" data-wact="clear">🗑 Clear all</button></div>
+    <div class="btnrow"><button class="btn lg go" data-act="B">✔ Done</button></div>
+    <div class="keys">Click a word to hear it · ✖ removes it · a word pack replaces the list</div>
+  </div>
+</div>
+
+<div id="pause" class="screen">
+  <div class="panel">
+    <h2>⏸ Paused</h2>
+    <div class="btncol">
+      <button class="btn lg go" data-act="A">▶ Keep playing</button>
+      <button class="btn" data-act="B">🏠 Back to hero select</button>
+      <div class="btnrow"><button class="btn sm" data-act="music">🎵 Music</button><button class="btn sm" data-act="gfx">✨ Graphics</button></div>
+    </div>
+    <div class="keys"><span class="b-x">✕</span> keep playing · <span class="b-o">○</span> hero select · M = music · G = graphics quality</div>
+  </div>
+</div>
+
+<div id="summary" class="screen">
+  <div class="panel wide">
+    <h2 id="sumTitle">📜 Spelling Report</h2>
+    <div id="sumStats"></div>
+    <div id="sumList"></div>
+    <div id="sumNote" class="keys"></div>
+    <div class="btnrow"><button class="btn lg go" data-act="A">🎁 Open the treasure!</button></div>
+  </div>
+</div>
+
+<div id="reveal" class="screen">
+  <div class="panel">
+    <h2>🎁 Treasure!</h2>
+    <div class="big" id="revIcon"></div>
+    <div class="nm" id="revName"></div>
+    <div id="revSub" style="margin:6px 0 10px"></div>
+    <div class="btnrow"><button class="btn lg go" data-act="A">Continue ▶</button></div>
+  </div>
+</div>
+
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<!-- load order matters: the files share one global scope -->
+<script src="js/settings.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/tween.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/corridor.js"></script>
+<script src="js/rig.js"></script>
+<script src="js/targets.js"></script>
+<script src="js/input.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
