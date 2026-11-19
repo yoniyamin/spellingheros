@@ -56,6 +56,16 @@ Object.assign(EMOJI_DICT,{
   day:'🌞',night:'🌃',light:'💡',seed:'🌱',leaf:'🍃',meat:'🍖',beach:'🏖️',peach:'🍑',tea:'🍵',pay:'💵',hay:'🌾',green:'🟩',
   feet:'🦶',tree:'🌳',see:'👀',teeth:'🦷',say:'💬',may:'🙋',rain:'🌧️',ice:'🧊',robot:'🤖',ghost:'👻',dragon:'🐉',rocket:'🚀',
 });
+/* pictures offered by the "More..." picker in the word editor (space separated) */
+const EMOJI_CATS = [
+  {icon:'🐾', name:'Animals', list:'🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🐔 🐧 🐦 🦆 🦉 🦇 🐺 🐴 🦄 🐝 🐛 🦋 🐌 🐞 🐜 🐢 🐍 🦎 🐙 🦀 🐠 🐟 🐬 🐳 🦈 🐘 🦒 🦓 🐪 🐑 🐐 🐒 🦘 🐓 🦅 🦜 🐉'.split(' ')},
+  {icon:'🍕', name:'Food', list:'🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🍒 🍑 🥭 🍍 🥝 🍅 🥕 🌽 🥦 🥔 🍞 🧀 🥚 🍳 🥞 🍔 🍟 🍕 🌭 🌮 🍝 🍣 🍦 🍩 🍪 🎂 🍰 🧁 🍫 🍬 🍭 🥛 ☕ 🍵 🧃 🍿'.split(' ')},
+  {icon:'🌳', name:'Nature', list:'☀️ 🌙 ⭐ 🌈 ☁️ ⛅ 🌧️ ⛈️ ❄️ ⛄ 💨 🌪️ 🔥 💧 🌊 🌍 🌋 ⛰️ 🏖️ 🌵 🌴 🌳 🌲 🌱 🌿 🍀 🍁 🍂 🌸 🌼 🌻 🌹 🌷 🍄 🐚 🪨'.split(' ')},
+  {icon:'🎒', name:'Things', list:'🏠 🏫 🚪 🛏️ 🪑 🔑 🔔 ⏰ 💡 📖 📚 ✏️ 🖍️ ✂️ 📦 🎁 🎒 👓 🎩 👑 👕 👗 👟 🧦 🧤 🧣 ☂️ 💍 📱 💻 📷 🎧 🔦 🧸 🪁 🧲 🔨 🪣 🧹 🧼 💰 🗝️'.split(' ')},
+  {icon:'🚗', name:'Travel', list:'🚗 🚕 🚌 🚓 🚑 🚒 🚜 🚲 🛵 🏍️ 🚂 🚆 ✈️ 🚁 🚀 🛸 🚢 ⛵ 🚤 ⚓ 🗺️ 🏰 🎡 🎪 ⛺ 🌉 🗼 🛣️ 🚦 ⛽'.split(' ')},
+  {icon:'🙂', name:'People', list:'😀 😃 😄 😁 😆 😊 😍 😎 🤩 🥳 😴 😢 😭 😡 😱 🤔 🤗 😇 👶 👦 👧 👨 👩 🧓 🤴 👸 🦸 🧙 🧚 🥷 👮 👷 👨‍🚀 🏃 💃 ✋ 👀 👂 👃 👄 🦷 🦵 🦶 💪 ❤️ 💖'.split(' ')},
+  {icon:'⚽', name:'Fun', list:'⚽ 🏀 🏈 ⚾ 🎾 🏐 🏓 🥊 🎯 🎮 🧩 🎲 🎨 🎭 🎤 🎸 🎹 🥁 🎺 🎵 🎬 🎉 🎈 🏆 🥇 🏊 🚴 ⛸️ 🎿 🪀 🛝 ⚔️ 🛡️ 🏹'.split(' ')},
+];
 
 /* ===================================================================== */
 const $ = id => document.getElementById(id);

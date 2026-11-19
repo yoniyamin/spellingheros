@@ -72,7 +72,14 @@
     <div class="wl-add">
       <input id="wIn" placeholder="Type a word - or many: cat, dog, sun" maxlength="300" autocomplete="off" spellcheck="false">
       <input id="eIn" placeholder="🙂" maxlength="8" title="Picture for the word (an emoji). Leave empty to pick one automatically.">
+      <button class="btn" data-wact="more" title="Pick a picture from a list">🎨 More…</button>
       <button class="btn go" data-wact="add">➕ Add</button>
+    </div>
+    <div id="picker" class="picker">
+      <div class="pk-top"><div id="pkTabs"></div>
+        <button class="btn sm" data-wact="auto" title="Let the game choose the picture">✨ Auto</button>
+        <button class="btn sm" data-wact="more" title="Close">✖</button></div>
+      <div id="pkGrid"></div>
     </div>
     <div id="wList" class="wl-list"></div>
     <div class="wl-row"><span class="lbl">Word packs:</span> <span id="packs"></span></div>

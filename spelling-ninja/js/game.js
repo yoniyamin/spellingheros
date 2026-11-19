@@ -88,7 +88,18 @@ function renderLocker(){
 }
 
 /* ---------------- word list editor (menu bar -> 📝 Words) ---------------- */
-function openWords(){ G.state='words'; setScreens('words'); renderWords(); SFX.swap(); }
+function openWords(){ G.state='words'; setScreens('words'); renderWords(); togglePicker(false); SFX.swap(); }
+/* "More..." picture picker: a category grid that fills the picture box (Auto clears it again) */
+let pkCat=0;
+function renderPicker(){
+  const cur=$('eIn').value.trim();
+  $('pkTabs').innerHTML=EMOJI_CATS.map((c,i)=>`<button class="pk-tab${i===pkCat?' on':''}" data-cat="${i}">${c.icon} ${esc(c.name)}</button>`).join('');
+  $('pkGrid').innerHTML=EMOJI_CATS[pkCat].list.map(e=>`<button class="pk-e${e===cur?' sel':''}" data-emo="${esc(e)}">${e}</button>`).join('');
+}
+function togglePicker(open){
+  const p=$('picker'), show=open===undefined?!p.classList.contains('show'):open;
+  p.classList.toggle('show',show); if(show) renderPicker();
+}
 function saveWords(){ save.words=WORDS.map(o=>({w:o.w,e:o.e})); save.perLevel=WORDS_PER_LEVEL; persist(); G.pool=[]; }
 function renderWords(){
   $('wList').innerHTML=WORDS.length?WORDS.map((w,i)=>`<span class="wchip"><span class="say" data-say="${i}" title="hear it">${esc(w.e)} ${esc(w.w)}</span><button class="x" data-del="${i}" title="remove">✖</button></span>`).join('')
@@ -102,16 +113,20 @@ function addWords(){
   let added=0;
   parts.forEach(w=>{ if(WORDS.some(o=>o.w===w)) return; WORDS.push({w,e:(parts.length===1&&myE)||EMOJI_DICT[w]||'✏️'}); added++; });
   if(!added){ SFX.wrong(); toast(parts.length?'Those words are already on the list':'Type a word first ✏️'); return; }
-  $('wIn').value=''; $('eIn').value=''; $('eIn').placeholder='🙂'; saveWords(); renderWords(); SFX.pop(); toast(`Added ${added} word${added>1?'s':''}! ✅`);
+  $('wIn').value=''; $('eIn').value=''; $('eIn').placeholder='🙂'; togglePicker(false); saveWords(); renderWords(); SFX.pop(); toast(`Added ${added} word${added>1?'s':''}! ✅`);
   if(parts.length===1) sayWord(parts[0]);
 }
 function wordsClick(e){
-  const t=e.target.closest('[data-del],[data-say],[data-pack],[data-wact]'); if(!t) return;
+  const t=e.target.closest('[data-del],[data-say],[data-pack],[data-wact],[data-emo],[data-cat]'); if(!t) return;
   if(t.dataset.del!==undefined){ WORDS.splice(+t.dataset.del,1); saveWords(); renderWords(); SFX.tick(); }
   else if(t.dataset.say!==undefined){ const w=WORDS[+t.dataset.say]; if(w) sayWord(w.w); }
   else if(t.dataset.pack!==undefined){ const p=WORD_PACKS[+t.dataset.pack]; WORDS.length=0; p.words.forEach(o=>WORDS.push({...o})); saveWords(); renderWords(); SFX.buy(); toast('Loaded '+p.name); }
+  else if(t.dataset.emo!==undefined){ $('eIn').value=t.dataset.emo; togglePicker(false); SFX.pop(); }
+  else if(t.dataset.cat!==undefined){ pkCat=+t.dataset.cat; renderPicker(); SFX.tick(); }
   else { const a=t.dataset.wact;
     if(a==='add') addWords();
+    else if(a==='more'){ togglePicker(); SFX.swap(); }
+    else if(a==='auto'){ $('eIn').value=''; togglePicker(false); SFX.swap(); toast('Auto picture ✨'); }
     else if(a==='per-'||a==='per+'){ WORDS_PER_LEVEL=Math.max(2,Math.min(10,WORDS_PER_LEVEL+(a==='per+'?1:-1))); saveWords(); renderWords(); SFX.swap(); }
     else if(a==='clear'){ if(confirm('Remove all the words from the list?')){ WORDS.length=0; saveWords(); renderWords(); } } }
   t.blur();
