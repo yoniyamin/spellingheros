@@ -122,7 +122,21 @@
   </div>
 </div>
 
-<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<div id="loadErr" style="display:none;position:fixed;inset:0;z-index:100;background:#aab0ea;color:#2d2f6b;text-align:center;padding:12vh 24px;font:700 clamp(18px,3vw,32px)/1.5 'Comic Sans MS','Trebuchet MS',Arial,sans-serif">
+  <div style="font-size:3em">😴</div>
+  <div>Spelling Heroes could not start.</div>
+  <div style="font-weight:400;font-size:.7em;margin-top:.6em">The 3D engine did not load. Check the internet connection (it is needed the first time),<br>and that this browser supports WebGL, then reload the page.</div>
+  <button onclick="location.reload()" style="margin-top:1.2em;font:inherit;font-size:.8em;padding:.4em 1.2em;border-radius:999px;border:0;background:#ffd23f;color:#2d2f6b;cursor:pointer">🔄 Try again</button>
+</div>
+<!-- Babylon.js is pinned to one version so a new release can never break the game by surprise.
+     To upgrade: change the version in this URL, then test the whole game. -->
+<script src="https://cdn.babylonjs.com/v9.37.1/babylon.js"></script>
+<script>
+  /* if the engine is missing (offline / blocked) or never finishes starting (no WebGL), show a friendly screen */
+  window.__showLoadError=function(){ var e=document.getElementById('loadErr'); if(e) e.style.display='block'; };
+  if(!window.BABYLON) window.__showLoadError();
+  window.addEventListener('load',function(){ if(!window.__ready) window.__showLoadError(); });
+</script>
 <!-- load order matters: the files share one global scope -->
 <script src="js/settings.js"></script>
 <script src="js/audio.js"></script>

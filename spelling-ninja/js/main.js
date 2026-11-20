@@ -47,5 +47,6 @@ scene.onBeforeRenderObservable.add(()=>{
 });
 engine.runRenderLoop(()=>scene.render());
 
-if(sessionStorage.getItem('skipTitle')){ try{ sessionStorage.removeItem('skipTitle'); }catch(e){} G.state='select'; enterSelect(); }
 refreshStats(); updateHints(); updateMenuLabels();
+snapshotScene();          // remember what exists now, so resetToSelect() can remove everything a run adds
+window.__ready=true;      // tells index.html that start-up worked (otherwise it shows the "could not start" screen)

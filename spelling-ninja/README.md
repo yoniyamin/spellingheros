@@ -59,6 +59,10 @@ fireworks and others).
 - **Word packs** replace the list with a ready-made set (Starter, Animals, Colors, ai / oa, Sight words, Numbers, Food).
 - **Words per boss** sets how many words make a level (2 to 10).
 - Click a word to hear it, ✖ to remove it. The list is saved in the browser.
+- **Practice words:** a word spelled with mistakes comes back about 3 words later in the same game, and words
+  the child keeps getting wrong appear more often in later games (a 🎯 marks them in this list). A word spelled
+  perfectly slowly loses its 🎯 again. The score is kept per word in the browser (`weak` in the save data) and is
+  forgotten when the word is removed from the list.
 
 ## Controls
 
@@ -67,6 +71,11 @@ fireworks and others).
 | Mouse / touch | Click signs, heroes and buttons |
 | Keyboard | `1`-`4` choose a letter sign, arrow keys move, `Enter` / `Space` confirm, `Esc` back, `P` pause, `R` hear the word, `M` music, `G` graphics |
 | PS4 controller | ✕ ○ □ △ for the four signs, D-pad / stick to move, R1 hears the word, Options pauses |
+
+The game can be paused at almost any moment (`P`, `Esc`, Options, or the ⏸ button), and it pauses by itself when the
+browser tab is hidden. "Back to hero select" in the pause menu resets the game in place (no page reload). If something
+unexpected goes wrong during play, the game retries the current word, and returns to hero select if that keeps failing,
+instead of getting stuck.
 
 ## Running it
 
@@ -77,8 +86,9 @@ cd spelling-ninja
 python -m http.server 8777
 ```
 
-Then open <http://localhost:8777/>. Babylon.js is loaded from `https://cdn.babylonjs.com/babylon.js`, so an
-internet connection is needed the first time. Progress (coins, stars, wardrobe, stickers, word list) is kept in
+Then open <http://localhost:8777/>. Babylon.js is loaded from a **pinned version** (`https://cdn.babylonjs.com/v9.37.1/babylon.js`, set in
+`index.html`) so a new Babylon release cannot break the game. To upgrade, change the version in that URL and test the
+whole game. An internet connection is needed the first time; if the engine cannot load, a "could not start" screen is shown. Progress (coins, stars, wardrobe, stickers, word list) is kept in
 the browser's `localStorage` under the key `spellingHeroes_v1`.
 
 ## Project layout

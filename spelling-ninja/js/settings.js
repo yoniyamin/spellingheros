@@ -77,8 +77,9 @@ const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 
 /* ---------------- save data ---------------- */
 const SAVE_KEY = 'spellingHeroes_v1';
-let save = {coins:25, stars:0, stickers:{}, owned:{}, equip:{}, hero:0};
+let save = {coins:25, stars:0, stickers:{}, owned:{}, equip:{}, hero:0, weak:{}};   // weak: "needs practice" score per word (see buildPool in game.js)
 try { Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY)||'{}')); } catch(e){}
+if(!save.weak || typeof save.weak!=='object' || Array.isArray(save.weak)) save.weak = {};
 save.equip = Object.assign({hat:null,neck:null,back:null,trail:null,pet:null,power:null}, save.equip||{});
 if(Array.isArray(save.words) && save.words.length){ WORDS.length=0; save.words.forEach(o=>{ if(o&&o.w) WORDS.push({w:String(o.w),e:o.e||'✏️'}); }); }
 if(save.perLevel>=2 && save.perLevel<=10) WORDS_PER_LEVEL = save.perLevel;

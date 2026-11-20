@@ -7,10 +7,10 @@
    ===================================================================== */
 const G={state:'title',heroIdx:save.hero||0,rigs:[],rig:null,x0:0,level:1,pool:[],cur:null,idx:0,wordMistakes:0,wrongRow:0,
          combo:0,bossHP:5,boss:null,dummies:[],lock:true,chest:null,prevState:'play',camX:0,shake:0,t:0,
-         results:[],rec:null,hover:-1,sumDone:null};
+         results:[],rec:null,hover:-1,sumDone:null,wordDone:false,again:{}};
 window.__game=G;
 const camT=V3(0,1.8,0);
-const run=fn=>fn().catch(e=>console.error(e));
+const run=fn=>fn().catch(recover);     // every game-flow chain goes through here, so any error ends up in recover() instead of freezing the game
 const show=(id,on)=>$(id).classList.toggle('show',on);
 const setScreens=name=>{ ['title','select','shop','locker','pause','reveal','words','summary'].forEach(s=>show(s,s===name)); };
 
@@ -29,7 +29,8 @@ function flyEl(html,from,toEl,ms=700){
     const r=toEl.getBoundingClientRect();
     requestAnimationFrame(()=>requestAnimationFrame(()=>{ const tr=`${ms}ms cubic-bezier(.3,.7,.4,1)`;
       e.style.transition=`left ${tr},top ${tr},transform ${ms}ms,opacity ${ms}ms`; e.style.left=(r.left+r.width/2)+'px'; e.style.top=(r.top+r.height/2)+'px'; e.style.transform='translate(-50%,-50%) scale(.7)'; }));
-    setTimeout(()=>{ e.remove(); res(); },ms+30); });
+    setTimeout(()=>e.remove(),ms+30);
+    wait(ms+30).then(res); });      // on the tween clock (not setTimeout), so resetting the game also stops whatever is waiting for this
 }
 function renderWord(){
   const w=G.cur.w; $('emoji').textContent=G.cur.e;
@@ -100,9 +101,13 @@ function togglePicker(open){
   const p=$('picker'), show=open===undefined?!p.classList.contains('show'):open;
   p.classList.toggle('show',show); if(show) renderPicker();
 }
-function saveWords(){ save.words=WORDS.map(o=>({w:o.w,e:o.e})); save.perLevel=WORDS_PER_LEVEL; persist(); G.pool=[]; }
+function saveWords(){
+  save.words=WORDS.map(o=>({w:o.w,e:o.e})); save.perLevel=WORDS_PER_LEVEL;
+  Object.keys(save.weak).forEach(k=>{ if(!WORDS.some(o=>o.w===k)) delete save.weak[k]; });     // forget practice scores of removed words
+  persist(); G.pool=[];
+}
 function renderWords(){
-  $('wList').innerHTML=WORDS.length?WORDS.map((w,i)=>`<span class="wchip"><span class="say" data-say="${i}" title="hear it">${esc(w.e)} ${esc(w.w)}</span><button class="x" data-del="${i}" title="remove">✖</button></span>`).join('')
+  $('wList').innerHTML=WORDS.length?WORDS.map((w,i)=>`<span class="wchip"><span class="say" data-say="${i}" title="hear it${weakOf(w.w)>=2?' - needs practice, it will come back more often':''}">${weakOf(w.w)>=2?'🎯 ':''}${esc(w.e)} ${esc(w.w)}</span><button class="x" data-del="${i}" title="remove">✖</button></span>`).join('')
     :'<i>No words yet - type some above!</i>';
   $('wCount').textContent=WORDS.length; $('perN').textContent=WORDS_PER_LEVEL;
   if(!$('packs').children.length) $('packs').innerHTML=WORD_PACKS.map((p,i)=>`<button class="btn sm" data-pack="${i}">${esc(p.name)}</button>`).join('');
@@ -147,7 +152,8 @@ $('shopGrid').addEventListener('click',e=>{ const it=e.target.closest('[data-i]'
 /* ---------------- input dispatch ---------------- */
 function onInput(a){
   audio();
-  if(G.state!=='play'){ if(a==='ok') a='A'; if(a==='back') a='B'; } else { if(a==='ok') return; if(a==='back') a='start'; }
+  // while playing (waiting for a letter, or watching an animation) Esc pauses and Enter/Space do nothing
+  if(G.state==='play'||G.state==='busy'){ if(a==='ok') return; if(a==='back') a='start'; } else { if(a==='ok') a='A'; if(a==='back') a='B'; }
   switch(G.state){
     case 'title': SFX.ding(0); enterSelect(); break;
     case 'select':
@@ -169,16 +175,77 @@ function onInput(a){
       else if(a==='L1'||a==='R1'){ if(G.cur) sayWord(G.cur.w); }
       else if(a==='start') pauseGame(true);
       break;
+    case 'busy': if(a==='start') pauseGame(true); break;     // animations (dashes, finishers, banners...) can be paused too
     case 'chest': if(a==='A') run(chestPress); else if(a==='start') pauseGame(true); break;
     case 'summary': if(a==='A'&&G.sumDone){ const f=G.sumDone; G.sumDone=null; setScreens(null); G.state='busy'; f(); } break;
     case 'pause':
-      if(a==='A'||a==='start') pauseGame(false); else if(a==='B'){ try{ sessionStorage.setItem('skipTitle','1'); }catch(e){} location.reload(); }
+      if(a==='A'||a==='start') pauseGame(false); else if(a==='B') resetToSelect();
       break;
   }
 }
 function pauseGame(on){
   if(on){ G.prevState=G.state; G.state='pause'; paused=true; setScreens('pause'); updateMenuLabels(); }
   else { G.state=G.prevState; paused=false; setScreens(null); }
+}
+/* pause by itself when the tab/window is hidden (the animation clock stops, so the timers that drive speech and effects must not run on without it) */
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden) return;
+  try{ speechSynthesis.cancel(); }catch(e){}
+  if(G.state==='play'||G.state==='busy'||G.state==='chest') pauseGame(true);
+});
+
+/* =====================================================================
+   RESET & ERROR RECOVERY
+   ===================================================================== */
+/* everything that exists when the game has finished starting up (rigs, corridor, lights...) is remembered, so that
+   "back to hero select" can throw away whatever a run created (boss, letter signs, flying projectiles, effects...) */
+let BASE=null;
+function snapshotScene(){ BASE=new Set([...scene.meshes,...scene.transformNodes]); }
+function sweepScene(){
+  if(!BASE) return;
+  [...scene.meshes,...scene.transformNodes].forEach(n=>{ if(!BASE.has(n)&&!n.parent&&!n.isDisposed()){ try{ n.dispose(); }catch(e){} } });
+}
+function resetRigPose(rig){
+  JN.forEach(n=>{ const p=REST[n]||[0,0,0]; rig.j[n].rotation.set(p[0],p[1],p[2]); });
+  rig.j.body.position.set(0,0,0); rig.busy=false; rig.moving=false; rig.dashing=false; rig.cheer=false;
+}
+function hideRunUi(){
+  ['banner','sticker','callout'].forEach(id=>$(id).classList.remove('show')); $('prompt').style.display='none'; $('flash').style.opacity=0;
+  document.querySelectorAll('.popt,.fly,.cdot').forEach(e=>e.remove());
+}
+/* Back to the hero select screen WITHOUT reloading the page: stop everything the run was doing, remove what it built, and put the world back at the start. */
+function resetToSelect(){
+  cancelTweens(); paused=false; slowMul=1; clearTimeout(slowT);          // every await in the old run now simply never continues
+  try{ speechSynthesis.cancel(); }catch(e){}
+  G.dummies.forEach(d=>{ try{ disposeDummy(d); }catch(e){} }); G.dummies=[];
+  if(G.boss){ try{ G.boss.dispose(); }catch(e){} }
+  if(G.chest){ try{ G.chest.ch.root.dispose(); }catch(e){} }
+  sweepScene();
+  G.boss=null; G.chest=null; G.cur=null; G.rec=null; G.rig=null; G.lock=true; G.sumDone=null; G.wordDone=false; G.again={};
+  G.combo=0; setCombo(); G.shake=0; camPunch=0; G.hover=-1; G.pool=[]; G.results=[];
+  hideRunUi(); $('hud').style.display='';
+  G.rigs.forEach(r=>{ resetRigPose(r); r.root.rotation.y=PI; r.root.scaling.setAll(1); });
+  aura.emitRate=0; streak.emitRate=0;
+  G.camX=0; SEGS.forEach((s,i)=>{ s.position.x=i*4-24; });                // the corridor scrolls forever, so put it back where it started
+  enterSelect();
+}
+/* Something went wrong in the middle of a run. A child should never get stuck: first try the current word again, and if that keeps
+   failing (or we are not in the middle of a word) go back to the hero select screen. */
+let recoverN=0, recoverT=0;
+function recover(err){
+  console.error('[recover]',err);
+  const now=performance.now(); recoverN=now-recoverT<20000?recoverN+1:1; recoverT=now;
+  const midWord=!!(G.rig&&G.boss&&G.cur&&G.bossHP>0&&!G.chest);
+  if(!midWord||recoverN>2){ toast('Oops, something went wrong - back to the hero menu'); resetToSelect(); return; }
+  toast('Oops! Let us try that word again 🔄'); paused=false; slowMul=1; G.state='busy'; setScreens(null);
+  run(retryWord);
+}
+async function retryWord(){
+  G.dummies.forEach(d=>{ try{ disposeDummy(d); }catch(e){} }); G.dummies=[];
+  resetRigPose(G.rig); hideRunUi();
+  if(G.wordDone){ await nextWord(); return; }                      // the word was already finished: just carry on with the next one
+  G.idx=0; G.wordMistakes=0; G.wrongRow=0; if(!G.rec) G.rec={w:G.cur.w,e:G.cur.e,miss:[]};
+  renderWord(); await spawnOptions();
 }
 
 /* =====================================================================
@@ -188,7 +255,7 @@ async function startRun(){
   G.state='busy'; setScreens(null); document.body.classList.add('playing');
   G.rigs.forEach((r,i)=>{ r.cheer=false; r.pod.setEnabled(false); r.root.setEnabled(i===G.heroIdx); });
   G.rig=G.rigs[G.heroIdx]; const rig=G.rig; rig.root.position.set(0,0,0); rig.root.rotation.y=PI/2+.45; rig.root.scaling.setAll(1);
-  G.x0=0; G.level=1; G.pool=[]; G.combo=0; G.camTarget=5.5; refreshStats(); setCombo();
+  G.x0=0; G.level=1; G.pool=[]; G.again={}; G.wordDone=false; G.combo=0; G.camTarget=5.5; refreshStats(); setCombo();
   await startLevel();
 }
 async function startLevel(){
@@ -199,9 +266,31 @@ async function startLevel(){
   SFX.thud(); await banner(`Level ${G.level} boss!`,G.boss.name,2200);
   await nextWord();
 }
+/* ---- which word comes next: words the child struggles with come back more often ----
+   save.weak[word] is a "needs practice" score (0-5): it goes up when the word had mistakes and down when it was spelled perfectly. */
+const weakOf=w=>save.weak[w]||0;
+function buildPool(last){
+  const items=[]; WORDS.forEach(o=>{ const k=weakOf(o.w), copies=1+(k>=3?2:k>=1?1:0); for(let i=0;i<copies;i++) items.push(o); });   // weak words get 1-2 extra turns per round
+  // draw the playing order one word at a time, never the same word as the one before (also not the one just played)
+  // (a word whose copies would no longer fit between the other words is placed right away, so copies never end up bunched at the end)
+  const seq=[]; let prev=last;
+  while(items.length){
+    const cnt={}; items.forEach(o=>{ cnt[o.w]=(cnt[o.w]||0)+1; });
+    const must=Object.keys(cnt).find(w=>w!==prev&&cnt[w]*2>items.length), ok=items.filter(o=>o.w!==prev);
+    const pick=rnd(must?items.filter(o=>o.w===must):(ok.length?ok:items));
+    items.splice(items.indexOf(pick),1); seq.push(pick); prev=pick.w; }
+  return seq.reverse();      // words are taken from the END of the pool, so the first word drawn must be last
+}
+/* after a word with mistakes: get it back in about 3 words' time (twice at most per run), so it is practised while it is fresh */
+function requeueWord(w){
+  if(WORDS.length<3||(G.again[w.w]||0)>=2) return;
+  G.again[w.w]=(G.again[w.w]||0)+1;
+  if(!G.pool.length) G.pool=buildPool(w.w);
+  G.pool.splice(Math.max(0,G.pool.length-3),0,w);
+}
 async function nextWord(){
-  if(!G.pool.length) G.pool=shuffle(WORDS.slice());
-  G.cur=G.pool.pop(); G.idx=0; G.wordMistakes=0; G.wrongRow=0; G.rec={w:G.cur.w,e:G.cur.e,miss:[]}; renderWord();
+  if(!G.pool.length) G.pool=buildPool(G.cur&&G.cur.w);
+  G.cur=G.pool.pop(); G.idx=0; G.wordMistakes=0; G.wrongRow=0; G.wordDone=false; G.rec={w:G.cur.w,e:G.cur.e,miss:[]}; renderWord();
   setTimeout(()=>sayWord(G.cur.w),250);
   await spawnOptions();
 }
@@ -344,6 +433,11 @@ async function finisher(rig,mega){
 async function wordComplete(){
   const rig=G.rig, w=G.cur; const stars=G.wordMistakes===0?3:G.wordMistakes<=2?2:1;
   if(G.rec){ G.results.push(G.rec); G.rec=null; }
+  G.wordDone=true;
+  // practice score: mistakes push it up (3+ mistakes count double), a perfect spelling lowers it again
+  const wk=weakOf(w.w), nk=G.wordMistakes===0?Math.max(0,wk-1):Math.min(5,wk+(G.wordMistakes>=3?2:1));
+  if(nk) save.weak[w.w]=nk; else delete save.weak[w.w];
+  if(G.wordMistakes>0) requeueWord(w);
   save.stickers[w.w]=Math.max(save.stickers[w.w]||0,stars); save.stars+=stars; addCoins(stars*3); persist();
   SFX.fanfare(); setTimeout(()=>say(w.w,.75),200);
   const st=$('sticker'); st.querySelector('.e').textContent=w.e; st.querySelector('.w').textContent=w.w;
