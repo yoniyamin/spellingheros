@@ -5,7 +5,7 @@
       "name": "spelling-heroes",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8777", "--directory", "spelling-ninja"],
-      "port": 8777, "autoPort": false
+      "port": 8777, "autoPort": true
     }
   ]
 }

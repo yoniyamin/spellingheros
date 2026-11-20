@@ -113,4 +113,114 @@ function bossEgg(){
   };
   return b;
 }
-const BOSSES=[bossHomework,bossBunny,bossEgg];
+/* Grumpy Red Pig: the "Puglin" from Quaternius' Bestiary - Dungeon Monsters kit (models/Puglin.glb), in its red colour variant
+   (models/Textures/Puglin-red.png). The model has no animation clips, so hit / laugh / defeat come from bossBase (wobbling the wob node).
+   It loads asynchronously; if that fails (offline, no loaders script, file missing) the old Giant Dust Bunny takes its place. */
+const PIG_SCALE=3.8, PIG_FACE=PI;     // PIG_FACE: turn about y (radians) so the pig looks at the camera (the model arrives facing away)
+const PIG_ARMS=-1.15;                 // the model is in a T-pose: swing both upper arms down by this much (radians, about the bone's z axis)
+const PIG_STOMP=3.2;                  // seconds between stomps (feet take turns)
+const PIG_LEG=1, PIG_LEAN=1, PIG_TAP=1, PIG_LID=1;    // turn directions (+1 / -1) for knee-up, lean, club tap and lid closing
+/* 3D eyes on top of the painted ones (those are tiny and stare at nothing). Measured from where the eye colour sits on the model,
+   in the Head bone's space (x = side, y = up, z = forward, in model units): a glowing eyeball, a pupil that watches the hero and
+   darts about, a highlight, and a grumpy slanted lid that blinks. */
+const PIG_EYE={x:.135,y:.11,z:.125,r:.056};
+const PIG_LID_REST=.3;                // how far the lids hang down when the pig is just glaring (0 = half the eyeball, PI/2 = shut)
+function pigEyes(head){
+  const R=PIG_EYE.r, ball=GM('#ffb43a'), dark=GM('#1a0b12'), shine=GM('#ffffff'), lidM=M('#6a2230',.35);
+  const list=[-1,1].map(s=>{
+    const c=nd(head,s*PIG_EYE.x,PIG_EYE.y,PIG_EYE.z); sp(R*2,ball,c);
+    const pupil=nd(c,0,0,R*.97); sp(R*.9,dark,pupil,0,0,0,1,1.2,.4); sp(R*.32,shine,pupil,R*.2,R*.26,R*.12);
+    const tilt=nd(c,0,0,0); tilt.rotation.z=s*.38;               // slanted towards the snout: a cross look
+    const hinge=nd(tilt,0,0,0);
+    const lid=BABYLON.MeshBuilder.CreateSphere('pigLid',{diameter:R*2.5,segments:14,slice:.5,sideOrientation:BABYLON.Mesh.DOUBLESIDE},scene);
+    fin(lid,lidM,hinge,0,0,0); return {c,pupil,hinge,lx:0,ly:0};
+  });
+  const inv=new BABYLON.Matrix(), loc=new BABYLON.Vector3(), tgt=new BABYLON.Vector3();
+  let nextBlink=1.5, blinkAt=-9, dartAt=0, dx=0, dy=0, glanceTill=-1, moodK='', moodTill=-1;
+  return {
+    mood(k,sec){ moodK=k; moodTill=G.t+sec; },
+    update(t){
+      // where to look: the hero's head most of the time, now and then a glare out at the player; small darts on top
+      if(t>dartAt){ dartAt=t+.35+Math.random()*1.1; dx=(Math.random()-.5)*.25; dy=(Math.random()-.5)*.18; if(Math.random()<.12) glanceTill=t+1.2; }
+      if(G.rig&&t>glanceTill) tgt.copyFrom(G.rig.root.position).addInPlaceFromFloats(0,2.2,0); else tgt.copyFrom(camera.position);
+      head.getWorldMatrix().invertToRef(inv); BABYLON.Vector3.TransformCoordinatesToRef(tgt,inv,loc);
+      list.forEach(e=>{
+        const d=loc.subtract(e.c.position).normalize(), x=Math.max(-.6,Math.min(.6,d.x+dx)), y=Math.max(-.45,Math.min(.45,d.y+dy));
+        e.lx+=(x-e.lx)*.35; e.ly+=(y-e.ly)*.35; e.pupil.position.set(e.lx*R*.97,e.ly*R*.97,Math.sqrt(Math.max(.05,1-e.lx*e.lx-e.ly*e.ly))*R*.97);
+      });
+      // lids: half shut and grumpy, a quick blink every few seconds (sometimes two), squeezed or smug when the boss reacts
+      if(t>nextBlink){ blinkAt=t; nextBlink=t+(Math.random()<.25?.3:2+Math.random()*3.5); }
+      let shut=t-blinkAt<.16?Math.sin((t-blinkAt)/.16*PI):0;
+      if(t<moodTill) shut=Math.max(shut,moodK==='squeeze'?1:.55);
+      const a=PIG_LID_REST+shut*(PI/2-PIG_LID_REST);
+      list.forEach(e=>{ e.hinge.rotation.x=a*PIG_LID; });
+    },
+  };
+}
+function pigStompDust(b,foot){
+  if(!foot||G.boss!==b||!G.bossArrived||QUAL==='low') return;
+  const p=foot.getAbsolutePosition();
+  burst(V3(p.x,.15,p.z-.3),{tex:'dot',count:8,power:2.2,size:.45,c1:[1,1,1],c2:[.82,.85,1],life:.55,grav:-1});
+}
+async function bossPig(){
+  let root=null;
+  try{
+    const res=await glbImport('Puglin.glb');
+    root=nd(null,0,0,0); const wob=nd(root,0,0,0), holder=nd(wob,0,0,0);
+    holder.scaling.setAll(PIG_SCALE); holder.rotation.y=PIG_FACE; res.meshes[0].parent=holder;
+    res.animationGroups.forEach(a=>a.stop());
+    const bone=n=>res.transformNodes.find(t=>t.name===n), AX=BABYLON.Axis, RA=BABYLON.Quaternion.RotationAxis;
+    [['upperarm_l',1],['upperarm_r',-1]].forEach(([n,s])=>{ const k=bone(n);                  // arms down (mirrored for the right arm)
+      if(k&&k.rotationQuaternion) k.rotationQuaternion=k.rotationQuaternion.multiply(RA(AX.Z,PIG_ARMS*s)); });
+    // bones the idle animation moves, with their rest rotation; pose(name,x,y,z) = rest rotation + turns about the bone's own x, y and z axes
+    const rest={}; ['spine_01','spine_02','spine_03','neck_01','Head','upperarm_l','upperarm_r','lowerarm_l','lowerarm_r','thigh_l','thigh_r','calf_l','calf_r','foot_l','foot_r']
+      .forEach(n=>{ const k=bone(n); if(k&&k.rotationQuaternion) rest[n]={k,q:k.rotationQuaternion.clone()}; });
+    const pose=(n,x=0,y=0,z=0)=>{ const r=rest[n]; if(!r) return; let q=r.q; if(x) q=q.multiply(RA(AX.X,x)); if(y) q=q.multiply(RA(AX.Y,y)); if(z) q=q.multiply(RA(AX.Z,z)); r.k.rotationQuaternion=q; };
+    const eyes=bone('Head')?pigEyes(bone('Head')):null;
+    // false = no flip, like glTF. Wait until it has really loaded: an unloaded texture draws the pig black (or a red/black checker when it fails)
+    let tex=null; await new Promise((ok,fail)=>{ const to=setTimeout(()=>fail(new Error('pig texture timed out')),20000);
+      tex=new BABYLON.Texture(GLB_DIR+'Textures/Puglin-red.png',scene,true,false,BABYLON.Texture.TRILINEAR_SAMPLINGMODE,()=>{ clearTimeout(to); ok(); },(m,e)=>{ clearTimeout(to); fail(e||new Error(m||'pig texture failed')); }); });
+    const old=[], mats=[]; res.meshes.forEach(m=>{ if(m.getTotalVertices&&m.getTotalVertices()>0){ if(m.material) old.push(m.material); glbToon(m,.003,tex); mats.push(m.material); } });
+    old.forEach(m=>{ try{ m.dispose(true,true); }catch(e){} });                               // the model's own PBR materials and textures are not used
+    holder.position.y=-.06;                                                                    // sink the soles a touch into the floor
+    // a tight, darker contact shadow under the feet (the round shadow the game adds is big and faint, so the feet seemed to hover)
+    const cm=new BABYLON.StandardMaterial('pigShadow',scene); cm.disableLighting=true; cm.diffuseColor=BABYLON.Color3.Black(); cm.emissiveColor=BABYLON.Color3.FromHexString('#1a1c5c'); cm.alpha=.42;
+    const cs=BABYLON.MeshBuilder.CreateDisc('pigContact',{radius:1,tessellation:32},scene); cs.rotation.x=PI/2; cs.scaling.set(1.55,1.05,1); cs.position.set(0,.045,.1);   // after the x turn the disc's y scale runs along the floor's z
+    cs.parent=root; cs.material=cm; cs.isPickable=false;
+    const b=bossBase(root,wob); b.name='Grumpy Red Pig'; b.grounded=true;                      // feet on the floor: no hovering bob
+    /* idle: the model has no clips, so move it by hand. Breathing, an impatient stomp (one foot lifts and slams down, the other foot
+       next time, with a jolt and a puff of dust), leaning onto the standing leg, tapping the club, a slow grumpy look around.
+       Only holder and the bones are touched here; wob belongs to hit / laugh / defeat. */
+    const feet={'-1':bone('foot_r'),'1':bone('foot_l')}; let stomped=-1;
+    b.idle=t=>{
+      const br=Math.sin(t*2.3), sw=Math.sin(t*1.15);
+      const cyc=Math.floor(t/PIG_STOMP), ph=t-cyc*PIG_STOMP, side=cyc%2?1:-1;          // side: +1 = the pig's left foot (glTF +x)
+      const u=Math.min(ph/.6,1), lift=u<.7?Math.sin(u/.7*PI/2):Math.cos((u-.7)/.3*PI/2);   // slow up, fast slam down
+      const imp=ph>.6?Math.exp(-(ph-.6)*9):0;                                              // landing jolt, fading out
+      if(ph>.6&&stomped!==cyc){ stomped=cyc; pigStompDust(b,feet[side]); }
+      const lean=Math.sin(Math.min(ph/.75,1)*PI);                                           // weight onto the standing leg while the other is up
+      holder.scaling.set(PIG_SCALE*(1-br*.010+imp*.03),PIG_SCALE*(1+br*.018-imp*.05),PIG_SCALE*(1-br*.010+imp*.03));
+      holder.rotation.z=sw*.02; holder.position.x=sw*.06;
+      const L=side>0?'_l':'_r', R=side>0?'_r':'_l';
+      pose('thigh'+L,-.95*lift*PIG_LEG); pose('calf'+L,1.35*lift*PIG_LEG); pose('foot'+L,-.4*lift*PIG_LEG);
+      pose('thigh'+R); pose('calf'+R); pose('foot'+R);
+      pose('spine_01',0,0,side*lean*.09*PIG_LEAN);
+      pose('spine_02',imp*.10,Math.sin(t*.85)*.10); pose('spine_03',0,0,-sw*.06);
+      // head: a slow look around, a little nod with the breath, jolted by the landing
+      pose('Head',Math.sin(t*1.5)*.05+imp*.16,Math.sin(t*.7+1)*.28,Math.sin(t*.9)*.05);
+      // arms swing a bit; the club hand (right) taps the club up and down twice between the stomps
+      const tap=ph>1.4&&ph<2.6?Math.abs(Math.sin((ph-1.4)/1.2*PI*2))*.6:0;
+      pose('upperarm_l',0,0,Math.sin(t*1.7)*.07+lean*side*.05); pose('upperarm_r',0,0,-Math.sin(t*1.7+.8)*.05);
+      pose('lowerarm_r',tap*PIG_TAP); pose('lowerarm_l',Math.sin(t*1.7)*.08);
+      if(eyes) eyes.update(t);
+    };
+    // the eyes react too: squeezed shut when hit, a smug squint when laughing, shut for good when defeated
+    const hit0=b.hit, laugh0=b.laugh, defeat0=b.defeat;
+    b.hit=async function(...a){ if(eyes) eyes.mood('squeeze',.55); return hit0.apply(b,a); };
+    b.laugh=async function(...a){ if(eyes) eyes.mood('smug',.9); return laugh0.apply(b,a); };
+    b.defeat=async function(...a){ if(eyes) eyes.mood('squeeze',99); return defeat0.apply(b,a); };
+    const base=b.dispose; b.dispose=function(){ base(); mats.forEach(m=>{ try{ m.dispose(false,false); }catch(e){} }); try{ cm.dispose(); }catch(e){} try{ tex.dispose(); }catch(e){} };
+    return b;
+  }catch(e){ console.warn('pig model not used, using the dust bunny:',e); if(root) root.dispose(); return bossBunny(); }
+}
+const BOSSES=[bossHomework,bossPig,bossEgg];

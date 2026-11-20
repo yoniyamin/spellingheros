@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spelling Heroes - asset test page</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* test page only: the 3D view sits to the right of the control panel, so the panel never hides the hero */
+  #c{left:calc(min(310px,46vw) + 20px);width:calc(100vw - min(310px,46vw) - 20px)}
+  /* the control panel on the left */
+  #tp{position:fixed;left:10px;top:10px;bottom:10px;width:min(310px,46vw);z-index:30;overflow-y:auto;padding:10px 12px;font-size:14px;line-height:1.3}
+  #tp h1{font-size:17px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  #tp h1 a{font-size:12px;color:var(--deep)}
+  #tp h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--deep);margin:12px 0 5px}
+  #tp .row{display:flex;flex-wrap:wrap;gap:5px}
+  #tp .small{font-size:12px;font-weight:400;opacity:.75;margin-top:4px}
+  #tp label{display:inline-flex;align-items:center;gap:5px;font-size:13px;cursor:pointer}
+  #tp select{font:inherit;font-size:13px;border:2px solid var(--deep);border-radius:10px;padding:2px 6px;background:#fff;color:var(--ink)}
+  .tb{font:inherit;font-size:13px;padding:5px 11px;border-radius:999px;border:2px solid var(--deep);background:#fff;color:var(--ink);cursor:pointer}
+  .tb:hover{background:var(--lav)}
+  .tb.on{background:var(--deep);color:#fff}
+  .tb.sig{border-color:#e0a000;box-shadow:0 0 0 2px #ffe27a}
+  .tb.go{background:#7be0a3;border-color:#2f9a60}
+  .tb.stop{background:#ff9aa0;border-color:#c0303a}
+  .tabs{display:flex;gap:5px;margin-top:8px}
+  .tabs .tb{flex:1;border-radius:12px}
+  body.busy .act{opacity:.4;pointer-events:none}
+  #now{min-height:1.4em;margin-top:8px;font-size:15px;color:var(--accent)}
+  #status{font-size:12px;font-weight:400;opacity:.75;margin-top:2px}
+</style>
+</head>
+<body>
+<canvas id="c" tabindex="0"></canvas>
+<div id="flash"></div><div id="toast"></div><div id="callout"></div>
+<div id="tp" class="chip"></div>
+
+<div id="loadErr" style="display:none;position:fixed;inset:0;z-index:100;background:#aab0ea;color:#2d2f6b;text-align:center;padding:12vh 24px;font:700 clamp(18px,3vw,32px)/1.5 'Comic Sans MS','Trebuchet MS',Arial,sans-serif">
+  <div style="font-size:3em">😴</div>
+  <div>The 3D engine did not load.</div>
+  <div style="font-weight:400;font-size:.7em;margin-top:.6em">Check the internet connection and that this browser supports WebGL, then reload.</div>
+</div>
+
+<!-- same pinned Babylon.js version as the game (index.html) -->
+<script src="https://cdn.babylonjs.com/v9.37.1/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/v9.37.1/loaders/babylonjs.loaders.min.js"></script>
+<script>if(!window.BABYLON) document.getElementById('loadErr').style.display='block';</script>
+
+<!-- stand-in for the game state (game.js is not loaded on this page); the shared scripts read these fields -->
+<script>
+  const G={state:'test',rigs:[],rig:null,boss:null,bossArrived:true,shake:0,t:0,combo:0,bossHP:5,prevState:'play',qualFixed:true,camX:0,camTarget:0};
+  window.__game=G;
+</script>
+<!-- the same shared scripts as the game, same load order (everything except game.js, input.js and main.js) -->
+<script src="js/settings.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/tween.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/finishers.js"></script>
+<script src="js/corridor.js"></script>
+<script src="js/rig.js"></script>
+<script src="js/targets.js"></script>
+<script>
+'use strict';
+/* =====================================================================
+   ASSET TEST PAGE: heroes + their moves, finishers, bosses.
+   Everything shown comes from the game's own tables (HEROES, MOVES, FIN, BOSSES), so new moves appear here automatically.
+   ===================================================================== */
+const T={tab:'heroes',hero:0,boss:0,mega:false,loop:false,slow:1,busy:false,stop:false,dummy:null,bossIdx:-1,bossDead:false,camZ:-10,camZT:-10};
+const camT=V3(0,1.8,0);
+const BOSS_LABEL={bossHomework:'Grumpy Homework Monster',bossPig:'Grumpy Red Pig',bossEgg:'Sleepy T-Rex Egg'};
+const HERO_X=0, DUMMY_X=1.75, BOSS_X_FIGHT=13.6;     // the game stands the hero 1.75 from the dummy and the boss 13.6 away
+let hitN=0, bossTok=0;
+
+/* ---- small copies of two game.js helpers (screen position of a 3D point, comic text) ---- */
+function toScreen(v){
+  const w=engine.getRenderWidth(), h=engine.getRenderHeight(), r=canvas.getBoundingClientRect();
+  const p=BABYLON.Vector3.Project(v,BABYLON.Matrix.IdentityReadOnly,scene.getTransformMatrix(),camera.viewport.toGlobal(w,h));
+  return {x:r.left+p.x/w*r.width,y:r.top+p.y/h*r.height};
+}
+function popText(txt,world,color){ const p=toScreen(world), e=document.createElement('div'); e.className='popt'; e.textContent=txt; e.style.left=p.x+'px'; e.style.top=p.y+'px';
+  if(color) e.style.color=color; document.body.appendChild(e); setTimeout(()=>e.remove(),1050); }
+function bossTarget(){ const t=G.boss.root.position.clone(); t.y=2.3; return t; }
+const bossX=()=>T.tab==='bosses'?0:BOSS_X_FIGHT;
+
+/* ---- the three heroes (same set-up as main.js) ---- */
+HEROES.forEach(h=>{ const r=makeRig(h); r.root.rotation.y=PI; r.root.position.x=HERO_X; G.rigs.push(r); });
+G.rigs.forEach(r=>{ if(r.hero.glb) upgradeRigToGlb(r); });
+
+/* ---- the target dummy for the hero moves ---- */
+async function ensureDummy(){
+  if(T.dummy) return T.dummy;
+  const d=makeDummy('A',0); d.root.position.set(HERO_X+DUMMY_X,0,0); d.root.scaling.setAll(.001); T.dummy=d;
+  d.root.setEnabled(T.tab==='heroes');
+  await tween(380,k=>d.root.scaling.setAll(Math.max(.001,k)),E.back); return d;
+}
+async function flyAway(d){        // same as launchDummy() in game.js
+  const p=d.root.position, p0=p.clone(), vx=2+Math.random()*3, vy=8+Math.random()*3, vz=-(2+Math.random()*3), sp=(Math.random()<.5?-1:1)*(5+Math.random()*5);
+  d.alive=false; if(T.dummy===d) T.dummy=null;
+  await tween(950,k=>{ p.x=p0.x+vx*k*2; p.z=p0.z+vz*k*2; p.y=p0.y+vy*k*2-9*k*k*2.2; d.root.rotation.z=k*sp; d.root.rotation.x=k*sp*.6; },E.lin);
+  disposeDummy(d); ensureDummy();      // a fresh dummy pops up right away, ready for the next move
+}
+
+/* ---- a hero move: same hit effects as wrong() in game.js ---- */
+async function runMove(mv){
+  const rig=G.rig, d=await ensureDummy();
+  setNow('🥋 '+mv);
+  const tp=d.root.position.clone(); tp.y=1.6;
+  await seq(rig,MOVES[mv],lvl=>{
+    if(lvl==='light'){ SFX.tick(); d.root.rotation.z=.25; setTimeout(()=>{ if(d.root) d.root.rotation.z=0; },80); if(Math.random()<.5) slashFx(tp); return; }
+    SFX.bonk(); setTimeout(()=>SFX.boing(),120); G.shake=.35; shock(tp.add(V3(0,0,-.6)),{size:3,ms:340}); freeze(70,.08); camPunch=.35;
+    popText(rnd(COMIC),tp,rnd(['#fff','#ffe066','#9fe8ff','#ffb3d9'])); burst(tp,{count:18,power:5,size:.4,c1:[1,1,1],c2:[.8,.85,1]});
+    hitFx(tp); flyAway(d);
+  });
+}
+function setPose(k){ const r=G.rig; r.moving=k==='run'; r.cheer=k==='cheer'; setNow(k==='idle'?'':'🙂 '+k); }
+
+/* ---- bosses ---- */
+async function ensureBoss(force){
+  if(!force&&G.boss&&T.bossIdx===T.boss&&!T.bossDead) return G.boss;
+  const tok=++bossTok;
+  if(G.boss){ try{ G.boss.dispose(); }catch(e){} G.boss=null; }
+  T.bossDead=false; hitN=0;
+  const b=await BOSSES[T.boss]();
+  if(tok!==bossTok){ try{ b.dispose(); }catch(e){} return G.boss; }
+  b.root.position.x=bossX(); b.root.setEnabled(T.tab!=='heroes'); G.boss=b; T.bossIdx=T.boss; renderNow(); return b;
+}
+async function bossAct(what){
+  const b=await ensureBoss(); if(!b) return;
+  setNow('👾 '+b.name+': '+what);
+  if(what==='hit'){ hitN=hitN%5+1; await b.hit(hitN); }
+  else if(what==='laugh') await b.laugh();
+  else if(what==='defeat'){ await b.defeat(); T.bossDead=true; }
+}
+
+/* ---- a finisher: same steps as finisher() in game.js (no pet shots) ---- */
+async function runFinisher(kind,mega){
+  const b=await ensureBoss(); if(!b) return;
+  const rig=G.rig, F=FIN[kind]; if(!F) return;
+  setNow((mega?'💥 MEGA ':'💥 ')+F.name);
+  const tgt=bossTarget(), from=rig.root.position.add(V3(.4,1.8,0)); rig.busy=true;
+  callout(mega?'💥 MEGA '+F.name:F.name, mega?'#ffe066':null);
+  for(const [p,ms] of F.pose) await poseTo(rig,p,ms);
+  SFX.whoosh();
+  const jobs=F.fire(from,tgt,mega);
+  if(mega){ const extra=rnd(['meteor','lightning','fireworks'].filter(k=>k!==kind)); jobs.push(...FIN[extra].fire(from,tgt,true)); }
+  jobs.push(poseTo(rig,{},380)); await Promise.all(jobs); rig.busy=false;
+  const bt=bossTarget().add(V3(0,0,-2));
+  SFX.bossHit(); G.shake=mega?.9:.45; popText(mega?'MEGA BLAST!':rnd(['POW!','BAM!','ZAP!','KABOOM!','WHAM!']),bossTarget().add(V3(-2,1.5,-1)),mega?'#ffd23f':'#fff');
+  burst(bt,{count:mega?90:40,power:mega?11:7,size:mega?.9:.6,c1:[1,.8,.2],c2:[1,.4,.6]});
+  shock(bossTarget().add(V3(0,0,-2.5)),{color:mega?'#ffd23f':'#ffffff',size:mega?8:4.5,ms:mega?560:420});
+  powFx(bt); powerHit(bt,true); if(mega) confetti(bt,30);
+  freeze(mega?210:110); camPunch=mega?1:.6; flash(mega?'#ffffff':'#fff6d8',mega?.55:.35);
+  hitN=hitN%5+1; await b.hit(hitN);
+}
+
+/* ---- running things (one at a time) ---- */
+async function act(fn){
+  if(T.busy) return; T.busy=true; T.stop=false; document.body.classList.add('busy');
+  try{ await fn(); }catch(e){ console.error(e); toast('Something went wrong - see the console'); }
+  finally{ T.busy=false; document.body.classList.remove('busy'); if(G.rig) G.rig.busy=false; setNow(''); }
+}
+async function playAll(list,run){
+  do{ for(const k of list){ if(T.stop) return; await run(k); if(T.stop) return; await wait(450); } }while(T.loop&&!T.stop);
+}
+
+/* ---- tabs ---- */
+function applyTab(){
+  G.rigs.forEach((r,k)=>r.root.setEnabled(k===T.hero&&T.tab!=='bosses')); G.rig=G.rigs[T.hero]; G.rig.moving=false; G.rig.cheer=false;
+  const cfg={heroes:[.9,-10],finishers:[5.5,-12.2],bosses:[0,-12.6]}[T.tab]; G.camTarget=cfg[0]; T.camZT=cfg[1];
+  if(T.dummy) T.dummy.root.setEnabled(T.tab==='heroes');
+  if(T.tab==='heroes'){ if(G.boss) G.boss.root.setEnabled(false); }
+  else { if(G.boss&&T.bossIdx===T.boss&&!T.bossDead) G.boss.root.setEnabled(true); else ensureBoss(); }
+}
+function setTab(t){ T.stop=true; T.tab=t; applyTab(); render(); }
+function setHero(i){ T.stop=true; T.hero=i; applyTab(); render(); }
+function setBoss(i){ T.stop=true; T.boss=i; ensureBoss(); render(); }
+
+/* ---- the panel ---- */
+const panel=document.getElementById('tp');
+function el(tag,cls,text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
+function btn(label,fn,cls='',isAct=true){ const b=el('button','tb '+cls+(isAct?' act':''),label); b.onclick=fn; return b; }
+function sect(title,kids,note){ const s=el('div'); if(title) s.appendChild(el('h3',null,title)); const r=el('div','row'); kids.forEach(k=>r.appendChild(k)); s.appendChild(r); if(note) s.appendChild(el('div','small',note)); return s; }
+function check(label,get,set){ const l=el('label'), c=el('input'); c.type='checkbox'; c.checked=get(); c.onchange=()=>set(c.checked); l.appendChild(c); l.appendChild(document.createTextNode(label)); return l; }
+const setNow=t=>{ T.now=t; renderNow(); };
+function renderNow(){ const n=document.getElementById('now'); if(n) n.textContent=T.now||''; const s=document.getElementById('status'); if(s){
+  const ok=G.rigs.filter(r=>!r.hero.glb||(r.glb&&r.glb.ready)).length; s.textContent=ok<G.rigs.length?`Loading 3D models: ${ok}/${G.rigs.length} ...`:'3D models loaded'+(G.boss?' · boss: '+G.boss.name:''); } }
+const heroPick=()=>sect('Hero',HEROES.map((h,i)=>btn(h.name.replace(/ the .*/,'').replace('Saint ','').replace('Princess ',''),()=>setHero(i),i===T.hero?'on':'',false)));
+
+function render(){
+  panel.innerHTML='';
+  const h=el('h1'); h.appendChild(el('span',null,'🧪 Asset test page')); const a=el('a',null,'← the game'); a.href='index.html'; h.appendChild(a); panel.appendChild(h);
+  panel.appendChild(el('div',null)).id='status';
+  const tabs=el('div','tabs'); [['heroes','🥋 Heroes'],['finishers','💥 Finishers'],['bosses','👾 Bosses']].forEach(([k,l])=>tabs.appendChild(btn(l,()=>setTab(k),T.tab===k?'on':'',false))); panel.appendChild(tabs);
+
+  if(T.tab==='heroes'){
+    const hero=G.rig.hero, mine=hero.moves, others=Object.keys(MOVES).filter(k=>!mine.includes(k));
+    panel.appendChild(heroPick());
+    panel.appendChild(sect('Poses',[btn('Idle',()=>setPose('idle')),btn('Run',()=>setPose('run')),btn('Cheer',()=>setPose('cheer'))]));
+    panel.appendChild(sect(hero.name+': moves',[...mine.map(m=>btn(m,()=>act(()=>runMove(m)))),
+      btn('▶ Play all',()=>act(()=>playAll(mine,runMove)),'go')],'Used when a letter is wrong.'));
+    panel.appendChild(sect('Other moves (not used by this hero)',others.map(m=>btn(m,()=>act(()=>runMove(m))))));
+  }
+  else if(T.tab==='finishers'){
+    const kinds=Object.keys(FIN), sig=G.rig.hero.finisher;
+    panel.appendChild(heroPick());
+    panel.appendChild(sect('Boss',BOSSES.map((f,i)=>btn(BOSS_LABEL[f.name]||f.name,()=>setBoss(i),i===T.boss?'on':'',false))));
+    panel.appendChild(sect('Finishers',[...kinds.map(k=>btn(FIN[k].name.replace('!',''),()=>act(()=>runFinisher(k,T.mega)),k===sig?'sig':'')),
+      btn('▶ Play all',()=>act(()=>playAll(kinds,k=>runFinisher(k,T.mega))),'go')],'Gold outline: this hero\'s own finisher. The others are shared by all heroes.'));
+    panel.appendChild(sect(null,[check('MEGA (the last word of a level)',()=>T.mega,v=>T.mega=v)]));
+  }
+  else {
+    panel.appendChild(sect('Boss',BOSSES.map((f,i)=>btn(BOSS_LABEL[f.name]||f.name,()=>setBoss(i),i===T.boss?'on':'',false))));
+    panel.appendChild(sect('Reactions',[btn('Hit',()=>act(()=>bossAct('hit'))),btn('Laugh',()=>act(()=>bossAct('laugh'))),btn('Defeat',()=>act(()=>bossAct('defeat'))),
+      btn('↺ Respawn',()=>act(()=>ensureBoss(true)),'go')],'The idle animation always runs. Hit cycles through the egg\'s cracks (1 to 5).'));
+  }
+
+  const f=el('div'); f.appendChild(el('h3',null,'Playback'));
+  const r=el('div','row');
+  const sl=el('select'); [[1,'Normal speed'],[.5,'Half speed'],[.25,'Quarter speed']].forEach(([v,l])=>{ const o=el('option',null,l); o.value=v; if(v===T.slow) o.selected=true; sl.appendChild(o); }); sl.onchange=()=>T.slow=+sl.value; r.appendChild(sl);
+  r.appendChild(check('Loop "Play all"',()=>T.loop,v=>T.loop=v)); r.appendChild(btn('⏹ Stop',()=>{ T.stop=true; },'stop',false));
+  f.appendChild(r); panel.appendChild(f);
+  const now=el('div'); now.id='now'; panel.appendChild(now);
+  panel.appendChild(el('div','small','Wardrobe items you have equipped in the game show up on the heroes here too. Pet shots are not part of the finishers here.'));
+  renderNow();
+}
+
+/* ---- main loop (a trimmed copy of main.js: tweens, rigs, camera, boss idle) ---- */
+fit(); setQuality(QUAL);
+scene.onBeforeRenderObservable.add(()=>{
+  const dtr=Math.min(engine.getDeltaTime()||16,50), dt=dtr*slowMul*T.slow; G.t+=dt/1000;
+  stepTweens(dt);
+  camPunch*=Math.exp(-dtr/120); camera.fov=baseFov*(1-camPunch*.09);
+  G.rigs.forEach(r=>{ if(r.root.isEnabled()) updateRig(r,dt); });
+  G.camX+=(((G.camTarget||0)-G.camX)*(1-Math.exp(-dt/320))); T.camZ+=(T.camZT-T.camZ)*(1-Math.exp(-dtr/320));
+  G.shake*=.9; const sx=(Math.random()-.5)*G.shake, sy=(Math.random()-.5)*G.shake;
+  camera.position.set(G.camX+sx,2.7+sy,T.camZ); camT.set(G.camX,1.8,0); camera.setTarget(camT);
+  SEGS.forEach(s=>{ if(s.position.x<G.camX-26) s.position.x+=SEGN*4; });
+  dust.emitter.x=G.camX; petals.emitter.x=G.camX+2; floor.position.x=Math.round((G.camX+14)/4)*4;
+  sun.position.set(G.camX+4-sunDir.x*30,-sunDir.y*30,-1-sunDir.z*30);
+  streak.emitRate=0; aura.emitRate=0;
+  if(G.boss){ const b=G.boss, tx=bossX(); b.root.position.x+=(tx-b.root.position.x)*(1-Math.exp(-dt/450));
+    b.root.position.y=b.grounded?0:Math.sin(G.t*2)*.18+.1; if(b.idle) b.idle(G.t);
+    if(b.zs) b.zs.forEach((z,i)=>{ z.position.y=4.2+i*.5+Math.sin(G.t*2+i)*.2; });
+    if(b.baby) b.baby.position.y=Math.abs(Math.sin(G.t*6))*.45; }
+  if(T.dummy&&!T.dummy.root.isDisposed()){ T.dummy.t+=dt/1000; if(T.dummy.alive) T.dummy.root.rotation.z=Math.sin(T.dummy.t*2.2)*.04; }
+});
+engine.runRenderLoop(()=>scene.render());
+
+applyTab(); render();
+setInterval(renderNow,500);
+window.__ready=true;
+</script>
+</body>
+</html>

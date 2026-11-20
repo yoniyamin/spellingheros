@@ -36,7 +36,7 @@ scene.onBeforeRenderObservable.add(()=>{
   // combo aura: flames around the hero from combo x3
   if(G.rig&&document.body.classList.contains('playing')){ const rp=G.rig.root.position; aura.emitter.set(rp.x,rp.y,rp.z); aura.emitRate=G.combo>=3?(QUAL==='low'?25:(G.combo>=5?90:55)):0; }
   else aura.emitRate=0;
-  if(G.boss){ const b=G.boss, tx=G.rig.root.position.x+13.6; b.root.position.x+=(tx-b.root.position.x)*(1-Math.exp(-dt/450)); b.root.position.y=Math.sin(G.t*2)*.18+.1;
+  if(G.boss){ const b=G.boss, tx=G.rig.root.position.x+13.6; b.root.position.x+=(tx-b.root.position.x)*(1-Math.exp(-dt/450)); b.root.position.y=b.grounded?0:Math.sin(G.t*2)*.18+.1; if(b.idle) b.idle(G.t);   // grounded bosses (with feet) stay on the floor
     if(!G.bossArrived&&Math.abs(tx-b.root.position.x)<1.5){ G.bossArrived=true; G.shake=.8; camPunch=.5; SFX.thud();
       burst(V3(b.root.position.x,.3,-1.5),{tex:'dot',count:40,power:6,size:.9,c1:[1,1,1],c2:[.8,.85,1],life:1.2,grav:-1}); shock(V3(b.root.position.x,.4,-2),{size:12,ms:700}); }
     if(b.zs) b.zs.forEach((z,i)=>{ z.position.y=4.2+i*.5+Math.sin(G.t*2+i)*.2; });
