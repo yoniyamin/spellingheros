@@ -6,6 +6,7 @@
    MAIN LOOP
    ===================================================================== */
 HEROES.forEach(h=>{ const r=makeRig(h); r.root.rotation.y=PI; G.rigs.push(r); });
+G.rigs.forEach(r=>{ if(r.hero.glb) upgradeRigToGlb(r); });     // swaps in the 3D model when it has loaded (async); the box hero is the fallback
 G.camTarget=0; layoutSelect(); fit(); setQuality(QUAL); try{ G.qualFixed=!!localStorage.getItem('sh_q2'); }catch(e){}
 let lastTick=performance.now(), fpsAcc=0, fpsN=0, fpsT=0;
 scene.onBeforeRenderObservable.add(()=>{

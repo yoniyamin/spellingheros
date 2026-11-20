@@ -57,10 +57,16 @@ function buildPrincess(rig){
 }
 const HEROES=[
   {id:'ninja',  name:'Kai the Red Ninja', desc:'Super-speedy karate chops!', build:buildNinja, finisher:'shuriken',
+    glb:{model:'character-soldier', texture:'colormap-kai.png', scale:2.9, extras:glbNinjaExtras,   // Kenney soldier, recoloured red; mask, tails and katana added
+         clips:{idle:'idle', move:'sprint', cheer:'emote-yes'}},
     moves:['spinChop','flyingKick','flurry','crane','hipBump','uppercut','tornadoSpin','dropKick','headbutt']},
   {id:'knight', name:'Saint Jordi the Knight', desc:'Shield bonks and silly sword swings!', build:buildKnight, finisher:'beam',
+    glb:{model:'character-knight', scale:2.9, sword:true, shield:true,   // Kenney mini-character (CC0); the box-built knight above is the fallback
+         clips:{idle:'idle', move:'sprint', cheer:'emote-yes'}},
     moves:['swordSpin','shieldBash','swordChop','hipBump','groundPound','headbutt','uppercut']},
   {id:'princess',name:'Princess Aina', desc:'Flips, kicks and boxing gloves!', build:buildPrincess, finisher:'sparkle',
+    glb:{model:'character-female-b', texture:'colormap-aina.png', scale:2.9, extras:glbPrincessExtras,   // Kenney female-b, recoloured pink; skirt, crown and cape added
+         clips:{idle:'idle', move:'sprint', cheer:'emote-yes'}},
     moves:['flipKick','flurry','spinChop','crane','hipBump','cartwheel','groundPound','tornadoSpin']},
 ];
 function makeRig(hero){
@@ -70,6 +76,7 @@ function makeRig(hero){
   const j={body}; j.legR=nd(body,.22,.75,0); j.legL=nd(body,-.22,.75,0); j.upper=nd(body,0,.78,0);
   j.armR=nd(j.upper,.63,.86,0); j.armL=nd(j.upper,-.63,.86,0); j.head=nd(j.upper,0,.94,0);
   rig.j=j; rig.root=root; hero.build(rig); outlineNode(root); blob(root,.8);
+  if(hero.glb) rig.lego=root.getChildMeshes();     // remembered so they can be hidden once the .glb model has loaded (or kept if it fails)
   rig.pod=nd(root,0,0,0); cy(1.7,1.9,.16,M('#aab0ee',.4),rig.pod,0,.04,0,36); tor(1.72,.07,GM('#ffffff'),rig.pod,0,.125,0); rig.pod.setEnabled(false);
   const tn=BABYLON.MeshBuilder.CreateBox('tn',{size:.01},scene); tn.isVisible=false; tn.parent=root; tn.position.set(0,.4,-.35); rig.trailNode=tn;
   applyCosmetics(rig); return rig;
@@ -129,14 +136,15 @@ function applyCosmetics(rig){
   if(rig.trailPS){ rig.trailPS.dispose(false); rig.trailPS=null; }      // false: keep the shared particle texture alive
   if(rig.jetPS){ rig.jetPS.dispose(false); rig.jetPS=null; }
   const e=save.equip, j=rig.j;
-  if(e.hat&&HATS[e.hat]){ const n=nd(j.head,0,0,0); HATS[e.hat](n,rig); outlineNode(n); rig.cos.push(n); }
-  if(e.neck){ const it=SHOP.find(s=>s.id===e.neck); if(it){ const n=nd(j.upper,0,.93,0);
+  const hd=rig.hold?rig.hold.head:j.head, nk=rig.hold?rig.hold.neck:j.upper, bk=rig.hold?rig.hold.back:j.upper;   // .glb heroes: anchors that follow the model's own head / torso bones
+  if(e.hat&&HATS[e.hat]){ const n=nd(hd,0,0,0); HATS[e.hat](n,rig); outlineNode(n); rig.cos.push(n); }
+  if(e.neck){ const it=SHOP.find(s=>s.id===e.neck); if(it){ const n=nd(nk,0,.93,0);
     if(it.kind==='bow'){ const m=M(it.color,.5); [-1,1].forEach(s=>{ const c=cy(0,.3,.26,m,n,s*.15,-.06,.31,4); c.rotation.z=s*PI/2; }); sp(.13,m,n,0,-.06,.31); }
     else if(it.kind==='medal'){ const rb=M('#3558d8',.4); [-1,1].forEach(s=>{ const b=bx(.08,.5,.04,rb,n,s*.12,-.27,.29); b.rotation.z=-s*.35; });
       const md=cy(.34,.34,.06,M('#ffd23f',.7),n,0,-.55,.31); md.rotation.x=PI/2; sp(.13,M('#fff27a',.8),n,0,-.55,.34,1,1,.3); }
     else { const m=M(it.color,.5); tor(.74,.2,m,n); const t=nd(n,.22,0,-.3); bx(.2,.6,.07,m,t,0,-.3,0); rig.scarfTail=t; }
     outlineNode(n); rig.cos.push(n); } }
-  if(e.back&&BACKS[e.back]){ const n=nd(j.upper,0,.85,-.32); BACKS[e.back](n,rig); outlineNode(n); rig.cos.push(n); }
+  if(e.back&&BACKS[e.back]){ const n=nd(bk,0,.85,-.32); BACKS[e.back](n,rig); outlineNode(n); rig.cos.push(n); }
   if(e.pet&&PETS[e.pet]){ const n=nd(rig.root,.95,2.9,-.55); PETS[e.pet](n,rig); outlineNode(n,.018); rig.pet=n; rig.petId=e.pet; rig.cos.push(n); }
   const T=TRAILS[e.trail];
   if(T){
@@ -165,7 +173,8 @@ async function seq(rig,frames,onHit){ rig.busy=true; for(const f of frames){ awa
 function updateRig(rig,dt){
   rig.t+=dt/1000; const t=rig.t, j=rig.j;
   const sw=(n,x,y,z,k=.28)=>{ const r=n.rotation; r.x+=(x-r.x)*k; r.y+=(y-r.y)*k; r.z+=(z-r.z)*k; };
-  if(!rig.busy){
+  if(rig.glb&&rig.glb.ready) updateGlb(rig);       // .glb hero: built-in clips for idle / run / cheer, the pose system for the funny moves
+  else if(!rig.busy){
     if(rig.cheer){
       sw(j.armR,-2.9+Math.sin(t*12)*.35,0,.3); sw(j.armL,-2.9+Math.sin(t*12+1)*.35,0,-.3);
       sw(j.legR,0,0,0); sw(j.legL,0,0,0); sw(j.upper,0,0,0); j.body.position.y=Math.abs(Math.sin(t*7))*.35;
@@ -191,6 +200,122 @@ function updateRig(rig,dt){
   if(rig.pet){ rig.pet.position.y=2.9+Math.sin(t*3)*.16; rig.pet.rotation.y=Math.sin(t*1.3)*.4; rig.pet.rotation.z=Math.sin(t*2.1)*.08; }
   if(rig.halo) rig.halo.position.y=1+Math.sin(t*3)*.05;
   if(rig.jetPS) rig.jetPS.emitRate=rig.moving||rig.busy?(QUAL==='low'?40:90):(QUAL==='low'?8:18);
+}
+
+/* =====================================================================
+   .GLB HEROES: Kenney "Mini Characters" (CC0), files in models/
+   The model's skeleton matches the pose joints above (torso=upper, arm-right=armR ...), so MOVES keep working:
+   - idle / run / cheer play the model's own animation clips (cross-faded)
+   - during a funny move (rig.busy) the clips stop and the joint rotations from poseTo() are copied onto the bones
+   If anything fails (offline, no loaders script) the box-built hero stays, so the game always works.
+   ===================================================================== */
+const GLB_DIR='models/';
+const GLB_BONES={upper:'torso',head:'head',armR:'arm-right',armL:'arm-left',legR:'leg-right',legL:'leg-left'};
+const GLB_ARM_HANG=1.13;
+const GLB_AXES=[1,-1,-1];      // the loader mirrors the model on x, so y and z turns flip sign (x turns do not)
+function glbImport(file){
+  const L=BABYLON.SceneLoader; if(!L||!L.ImportMeshAsync) return Promise.reject(new Error('no model loader'));
+  return L.ImportMeshAsync('',GLB_DIR,file,scene);
+}
+/* the model ships with PBR materials; the game's look is toon-like, so use a simple lit material with the same colour map */
+function glbToon(mesh,outline,texture){
+  const src=mesh.material; if(!src) return;
+  const m=new BABYLON.StandardMaterial('glb',scene), tex=texture||src.albedoTexture||src.diffuseTexture;
+  m.diffuseTexture=tex; m.emissiveTexture=tex; m.emissiveColor=new BABYLON.Color3(.85,.85,.85); m.diffuseColor=new BABYLON.Color3(.65,.65,.65); m.specularColor=new BABYLON.Color3(.08,.08,.1); m.specularPower=24; m.backFaceCulling=true;
+  mesh.material=m; mesh.isPickable=false; mesh.alwaysSelectAsActiveMesh=true; reg(mesh);
+  if(outline){ mesh.renderOutline=true; mesh.outlineWidth=outline; mesh.outlineColor=OUTC; }
+}
+async function upgradeRigToGlb(rig){
+  const def=rig.hero.glb; if(!def||rig.glb) return;
+  let holder=null;
+  try{
+    const res=await glbImport(def.model+'.glb');
+    const top=res.meshes[0], j=rig.j;
+    res.animationGroups.forEach(a=>{ a.stop(); a.targetedAnimations.forEach(t=>{ t.animation.enableBlending=true; t.animation.blendingSpeed=.07; }); });
+    const groups={}; res.animationGroups.forEach(a=>groups[a.name]=a);
+    const node=n=>res.transformNodes.find(t=>t.name===n);
+    holder=nd(j.body,0,0,0); holder.scaling.setAll(def.scale); top.parent=holder;
+    // The clips only key the joints they use, so a joint keeps its last value when another clip starts. The model's "static" clip is its
+    // bind pose: remember it, and put every joint a new clip does not animate back to it (see glbBase). The pose system rotates on top of it.
+    const base=[], rest={}, bones={};
+    (groups['static']?groups['static'].targetedAnimations:[]).forEach(t=>{ const v=t.animation.getKeys()[0].value; base.push({t:t.target,p:t.animation.targetProperty,v:v.clone()}); });
+    for(const k in GLB_BONES){ const b=node(GLB_BONES[k]); bones[k]=b;
+      const bs=base.find(x=>x.t===b&&x.p==='rotationQuaternion'); rest[k]=bs?bs.v.clone():b.rotationQuaternion.clone(); }
+    // The model's arms are a T-pose; its idle rests them 0.55 rad below horizontal. The pose system thinks of arms as hanging down (a swing
+    // forward is a turn about x), so use a hanging rest instead: 25 degrees out from vertical (1.13 rad about z; mirrored for the left arm).
+    [['armR',GLB_ARM_HANG],['armL',-GLB_ARM_HANG]].forEach(([k,a])=>{ const q=BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z,a); rest[k]=q;
+      const bs=base.find(x=>x.t===bones[k]&&x.p==='rotationQuaternion'); if(bs) bs.v=q.clone(); else base.push({t:bones[k],p:'rotationQuaternion',v:q.clone()}); });
+    // def.texture = a recoloured copy of the shared colour map (models/Textures/): same layout, other colours. false = no flip, like glTF
+    const tex=def.texture?new BABYLON.Texture(GLB_DIR+'Textures/'+def.texture,scene,true,false):null;
+    res.meshes.forEach(m=>{ if(m.getTotalVertices&&m.getTotalVertices()>0) glbToon(m,def.outline||.004,tex); });
+    // anchors for hats / scarves / capes that follow the head and torso bones (the model's scale + mirror are cancelled out).
+    // The box heroes are ~0.6 wide with a hat resting at y~0.6; the model's head is bigger, so each anchor has its own scale and height.
+    const mkHold=(bone,y,s)=>{ const h=nd(bone,0,y/def.scale,0); h.scaling.set(-s/def.scale,s/def.scale,s/def.scale); return h; };
+    rig.hold={head:mkHold(bones.head,def.headY??-.08,def.headScale??1.85), neck:mkHold(bones.upper,def.neckY??-1.1,def.neckScale??1.5),
+              back:mkHold(bones.upper,def.backY??-.19,def.backScale??.75)};
+    // props hang from the arm bones (T-pose: the hand is 0.28 along the arm); turned back by the arm's rest angle so they stay upright
+    try{      // a missing prop must not cost the hero its model
+      if(def.sword) await glbAttach(res,'weapon-sword',bones.armR,def.swordFit||{p:[-.27,-.02,.05],r:[0,0,-GLB_ARM_HANG],s:1});
+      if(def.shield) await glbAttach(res,'shield-round',bones.armL,def.shieldFit||{p:[.27,-.03,.07],r:[0,0,GLB_ARM_HANG],s:1});
+    }catch(e){ console.warn('prop not loaded:',e); }
+    rig.glb={ready:true,def,groups,bones,rest,base,snap:{},cur:null,wasBusy:false,blend:0,top,holder,mk:mkHold};
+    glbBase(rig.glb);
+    rig.lego.forEach(m=>m.setEnabled(false));
+    if(def.extras){ try{ await def.extras(rig,rig.glb); }catch(e){ console.warn('hero extras not added:',e); } }   // parts the model does not have (mask, skirt, crown ...)
+    applyCosmetics(rig);
+  }catch(e){ console.warn('3D model not used, keeping the built-in hero:',e); rig.hold=null; rig.glb=null; if(holder) holder.dispose(); }
+}
+/* Parts the Kenney models do not have. Each hero's anchors work in "box hero" units (a head is ~0.6 wide, see mkHold above),
+   so the numbers are close to the ones in buildNinja / buildPrincess. */
+async function glbNinjaExtras(rig,g){
+  const dark=M('#1d1d33'), tail=M('#7a0d15');
+  const face=nd(rig.hold.head,0,0,0);
+  bx(.6,.17,.58,dark,face,0,.08,0);                           // mask over the mouth and nose
+  rig.tails=[]; for(let i=0;i<2;i++){ const t=nd(rig.hold.head,0,.4,-.3); t.rotation.y=(i?1:-1)*.25; bx(.1,.06,.55,tail,t,0,0,-.27); rig.tails.push(t); }   // headband ends
+  outlineNode(face);
+  await glbAttach(null,'weapon-sword',g.bones.upper,{p:[.05,.02,-.2],r:[0,0,-.7],s:1});     // katana across the back
+}
+function glbPrincessExtras(rig,g){
+  const gold=M('#ffd23f',.6), pink=M('#ff6fa8'), rim=M('#ffe0f0',.6);
+  const skirt=g.mk(g.bones.upper,-.1,1);                       // follows the torso; world-size units
+  cy(1.02,1.55,.42,pink,skirt,0,-.02,0); cy(1.55,1.59,.08,rim,skirt,0,-.2,0); bx(1.04,.09,.66,gold,skirt,0,.2,0);
+  const crown=nd(rig.hold.head,0,.62,0); cy(.6,.6,.08,gold,crown); [-.17,0,.17].forEach(x=>cy(0,.14,.16,gold,crown,x,.1,.2));
+  const cape=nd(rig.hold.back,0,.95,-.3); bx(1.05,.72,.06,M('#7b4fd6'),cape,0,-.36,0); bx(1.15,.1,.1,gold,cape,0,0,.02); rig.cape=cape;   // short, so the wide skirt does not hide it
+  outlineNode(skirt); outlineNode(crown); outlineNode(cape);
+}
+
+/* hang a prop (sword, shield...) from a bone; its own mesh is used so no extra mirror is applied */
+async function glbAttach(owner,file,bone,fit){
+  const r=await glbImport(file+'.glb'), mesh=r.meshes.find(m=>m.getTotalVertices&&m.getTotalVertices()>0);
+  if(!mesh) return;
+  mesh.parent=bone; mesh.position.set(...fit.p); mesh.rotationQuaternion=null; mesh.rotation.set(...fit.r); mesh.scaling.setAll(fit.s);
+  glbToon(mesh,.004); r.meshes[0].dispose(); r.animationGroups.forEach(a=>a.dispose());
+}
+/* put joints back to the bind pose, except the ones listed in `skip` (a Set of "uniqueId.property") */
+function glbBase(g,skip){
+  g.base.forEach(b=>{ if(skip&&skip.has(b.t.uniqueId+'.'+b.p)) return; if(b.p==='rotationQuaternion') b.t.rotationQuaternion=b.v.clone(); else b.t[b.p].copyFrom(b.v); });
+}
+function glbPlay(rig,key){
+  const g=rig.glb; if(g.cur===key) return; g.cur=key;
+  for(const n in g.groups) if(g.groups[n].isStarted) g.groups[n].stop();
+  const a=g.groups[g.def.clips[key]];
+  glbBase(g,a&&new Set(a.targetedAnimations.map(t=>t.target.uniqueId+'.'+t.animation.targetProperty)));   // joints this clip animates keep their value, so it can blend
+  if(a) a.start(true,key==='move'?1.15:1);
+}
+function updateGlb(rig){
+  const g=rig.glb, j=rig.j;
+  if(rig.busy){
+    if(!g.wasBusy){ g.wasBusy=true; g.blend=0; g.cur=null; for(const n in g.groups) if(g.groups[n].isStarted) g.groups[n].stop();
+      for(const k in g.bones) g.snap[k]=g.bones[k].rotationQuaternion.clone();
+      glbBase(g,new Set(Object.values(g.bones).map(b=>b.uniqueId+'.rotationQuaternion'))); }   // everything except the 6 driven joints back to bind pose
+    g.blend=Math.min(1,g.blend+engine.getDeltaTime()/150);
+    for(const k in g.bones){ const r=j[k].rotation, d=BABYLON.Quaternion.RotationYawPitchRoll(r.y*GLB_AXES[1],r.x*GLB_AXES[0],r.z*GLB_AXES[2]);
+      g.bones[k].rotationQuaternion=BABYLON.Quaternion.Slerp(g.snap[k],d.multiply(g.rest[k]),g.blend); }
+  } else {
+    g.wasBusy=false;
+    glbPlay(rig,rig.cheer?'cheer':rig.moving?'move':'idle');
+    j.body.position.y=rig.cheer?Math.abs(Math.sin(rig.t*7))*.3:j.body.position.y*.7;
+  }
 }
 
 /* ---- the funny moves ---- */

@@ -131,6 +131,8 @@
 <!-- Babylon.js is pinned to one version so a new release can never break the game by surprise.
      To upgrade: change the version in this URL, then test the whole game. -->
 <script src="https://cdn.babylonjs.com/v9.37.1/babylon.js"></script>
+<!-- loads the .glb character models (models/). Optional: without it the game falls back to the box-built heroes. -->
+<script src="https://cdn.babylonjs.com/v9.37.1/loaders/babylonjs.loaders.min.js"></script>
 <script>
   /* if the engine is missing (offline / blocked) or never finishes starting (no WebGL), show a friendly screen */
   window.__showLoadError=function(){ var e=document.getElementById('loadErr'); if(e) e.style.display='block'; };
