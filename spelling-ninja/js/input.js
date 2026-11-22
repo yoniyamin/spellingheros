@@ -30,6 +30,7 @@ window.addEventListener('keydown',e=>{
   if(tg&&(tg.tagName==='INPUT'||tg.tagName==='TEXTAREA')){ if(e.key==='Escape') tg.blur(); return; }
   if(e.key==='m'||e.key==='M'){ toggleMusic(); return; }
   if(e.key==='g'||e.key==='G'){ cycleGfx(); return; }
+  if(e.key==='t'||e.key==='T'){ toggleTimer(); return; }
   if(G.state==='title'){ e.preventDefault(); onInput('A'); return; }
   const a=KEYMAP[e.key]; if(a){ e.preventDefault(); onInput(a); }
 });

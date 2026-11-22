@@ -19,6 +19,7 @@ scene.onBeforeRenderObservable.add(()=>{
       if(fps<28){ const nq=QUAL==='high'?'balanced':'low'; setQuality(nq); updateMenuLabels(); toast('Graphics set to '+QNAME[nq]+' for smoother play (press G to change)'); } else G.qualFixed=true; } }
   if((G.frame=(G.frame||0)+1)%12===0){ try{ Music.update(); }catch(e){} }
   if(paused) return;
+  tickLetterTimer(dt);
   const sel=G.state==='select'||G.state==='shop'||G.state==='locker'||G.state==='title';
   G.rigs.forEach((r,i)=>{ if(!r.root.isEnabled()) return; updateRig(r,dt);
     if(sel){ const hot=(G.state==='select'||G.state==='shop')&&i===G.heroIdx, tgt=hot?1.3:1, s=r.root.scaling.x+(tgt-r.root.scaling.x)*.2; r.root.scaling.setAll(s);

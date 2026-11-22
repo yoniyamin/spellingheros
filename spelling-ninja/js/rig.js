@@ -268,11 +268,16 @@ async function upgradeRigToGlb(rig){
 /* Parts the Kenney models do not have. Each hero's anchors work in "box hero" units (a head is ~0.6 wide, see mkHold above),
    so the numbers are close to the ones in buildNinja / buildPrincess. */
 async function glbNinjaExtras(rig,g){
-  const dark=M('#1d1d33'), tail=M('#7a0d15');
+  const tail=M('#7a0d15'), hood=M('#b81822'), fold=M('#d42a35');
   const face=nd(rig.hold.head,0,0,0);
-  bx(.6,.17,.58,dark,face,0,.08,0);                           // mask over the mouth and nose
+  // rounded rectangle prism: two boxes plus four corner cylinders (a custom mesh would draw badly with the outline pass)
+  const rr=(w,d,h,r,mat,y)=>{ const n=nd(face,0,y,0); bx(w-2*r,h,d,mat,n); bx(w,h,d-2*r,mat,n);
+    [-1,1].forEach(sx=>[-1,1].forEach(sz=>cy(2*r,2*r,h,mat,n,sx*(w/2-r),0,sz*(d/2-r),20))); };
+  rr(.58,.56,.15,.14,hood,.125);                                                        // rounded hood wrap over the mouth and chin; wider than the head so its square corners are hidden
+  [.1,.145].forEach(y=>rr(.595,.575,.016,.145,fold,y));                                 // cloth folds
+  rr(.6,.58,.026,.145,fold,.203);                                                       // folded top edge, just under the eyes
+  [-1,1].forEach(s=>bx(.07,.09,.5,hood,face,s*.2075,.255,0));                           // hood sides framing the eye window
   rig.tails=[]; for(let i=0;i<2;i++){ const t=nd(rig.hold.head,0,.4,-.3); t.rotation.y=(i?1:-1)*.25; bx(.1,.06,.55,tail,t,0,0,-.27); rig.tails.push(t); }   // headband ends
-  outlineNode(face);
   await glbAttach(null,'weapon-sword',g.bones.upper,{p:[.05,.02,-.2],r:[0,0,-.7],s:1});     // katana across the back
 }
 function glbPrincessExtras(rig,g){

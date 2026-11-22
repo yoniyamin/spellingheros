@@ -15,9 +15,9 @@ and bringing missed words back (practice words).
   with "words to practise" and "sounds that are hard" (the picked wrong letters already show which sounds get mixed up).
 - **Difficulty never changes.** Level 5 is the same four-sign choice as level 1. Later levels could use more
   confusable letters, switch off the automatic hint after two misses, or add a word with no picture.
-- **Guessing is free.** A wrong letter only resets the combo, so clicking signs at random works (1 in 4).
-  Options: a tiny coin penalty, no coins for a letter picked after a miss on the same position, or a short
-  "listen again" step after the second miss in a row.
+- **Guessing is no longer free.** Wrong letters and timeouts cost lives (3 per boss round) and the word is said again
+  after every choice. Still open: watch real play to see whether 3 lives / 20 seconds suit the child, and whether a
+  speed bonus (fast answers earn extra coins) or a coin cost for hints would help.
 - **Recall, not just recognition.** Every word is spelled by recognising the right letter among four. An optional
   "type it" or "no sign shown, only the choices" mode would train recall.
 

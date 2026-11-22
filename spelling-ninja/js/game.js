@@ -7,7 +7,9 @@
    ===================================================================== */
 const G={state:'title',heroIdx:save.hero||0,rigs:[],rig:null,x0:0,level:1,pool:[],cur:null,idx:0,wordMistakes:0,wrongRow:0,
          combo:0,bossHP:5,boss:null,dummies:[],lock:true,chest:null,prevState:'play',camX:0,shake:0,t:0,
-         results:[],rec:null,hover:-1,sumDone:null,wordDone:false,again:{}};
+         results:[],rec:null,hover:-1,sumDone:null,wordDone:false,again:{},
+         lives:LIVES_PER_BOSS,blanks:[],timeLeft:null};     // blanks: the letter positions to spell in this word; timeLeft: seconds left for this letter (null = not running)
+let timerOn=true; try{ timerOn=localStorage.getItem('sh_timer')!=='off'; }catch(e){}
 window.__game=G;
 const camT=V3(0,1.8,0);
 const run=fn=>fn().catch(recover);     // every game-flow chain goes through here, so any error ends up in recover() instead of freezing the game
@@ -32,11 +34,43 @@ function flyEl(html,from,toEl,ms=700){
     setTimeout(()=>e.remove(),ms+30);
     wait(ms+30).then(res); });      // on the tween clock (not setTimeout), so resetting the game also stops whatever is waiting for this
 }
+/* slots: given (already filled in, grey) · filled (spelled, green) · cur (the one to spell now) · todo (still to come, faded) */
 function renderWord(){
   const w=G.cur.w; $('emoji').textContent=G.cur.e;
-  $('blanks').innerHTML=[...w].map((ch,i)=>`<div class="slot ${i<G.idx?'filled':i===G.idx?'cur':''}" id="slot${i}">${i<G.idx?ch:''}</div>`).join('');
+  $('blanks').innerHTML=[...w].map((ch,i)=>{
+    const given=!G.blanks.includes(i), cls=given?'given':i<G.idx?'filled':i===G.idx?'cur':'todo';
+    return `<div class="slot ${cls}" id="slot${i}">${given||i<G.idx?ch:''}</div>`; }).join('');
+}
+/* which letters of a word the child has to spell on this level (see BLANK_SHARE in settings.js); vowels are blanked first */
+function pickBlanks(w){
+  const all=[...w].map((_,i)=>i), share=BLANK_SHARE[G.level-1];
+  if(!share) return all;
+  const n=Math.max(1,Math.min(all.length,Math.round(all.length*share)));
+  const vow=shuffle(all.filter(i=>VOWELS.includes(w[i]))), con=shuffle(all.filter(i=>!VOWELS.includes(w[i])));
+  return vow.concat(con).slice(0,n).sort((a,b)=>a-b);
 }
 function renderHearts(){ $('hearts').textContent='❤️'.repeat(Math.max(0,G.bossHP))+'🖤'.repeat(Math.max(0,WORDS_PER_LEVEL-G.bossHP)); }
+function renderLives(){ $('livesbox').textContent='💚'.repeat(Math.max(0,G.lives))+'🖤'.repeat(Math.max(0,LIVES_PER_BOSS-G.lives)); }
+function loseLife(){
+  G.lives=Math.max(0,G.lives-1); renderLives();
+  const b=$('livesbox'); b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
+}
+/* ---- letter timer ---- */
+function updateTimerBar(){
+  const t=$('timer'), on=timerOn&&G.timeLeft!=null; t.classList.toggle('on',on); if(!on) return;
+  const f=Math.max(0,G.timeLeft/LETTER_TIME); t.firstElementChild.style.width=(f*100)+'%';
+  t.classList.toggle('warn',G.timeLeft<=10&&G.timeLeft>5); t.classList.toggle('low',G.timeLeft<=5);
+}
+function startTimer(){ G.timeLeft=LETTER_TIME; updateTimerBar(); }
+function stopTimer(){ G.timeLeft=null; updateTimerBar(); }
+function tickLetterTimer(dt){          // called from the main loop (it does not run while paused)
+  if(!timerOn||G.timeLeft==null||G.state!=='play'||G.lock) return;
+  const before=Math.ceil(G.timeLeft); G.timeLeft-=dt/1000; updateTimerBar();
+  if(G.timeLeft<=5&&Math.ceil(G.timeLeft)<before&&G.timeLeft>0) SFX.tick();       // a tick every second in the last 5 seconds
+  if(G.timeLeft<=0){ G.lock=true; G.timeLeft=null; updateTimerBar(); run(timeUp); }
+}
+/* say the word again (once) as a reminder */
+const remindWord=()=>{ if(G.cur) say(G.cur.w,.72); };
 function setCombo(){ const c=$('combo'); if(G.combo>=2){ c.textContent=`🔥 x${Math.min(G.combo,5)} combo!`; c.style.opacity=1; c.classList.toggle('hot',G.combo>=3); } else c.style.opacity=0; }
 
 /* ---------------- menu bar helpers ---------------- */
@@ -44,7 +78,10 @@ function updateMenuLabels(){
   $('mbMusic').textContent=musicOn?'🎵 Music: On':'🔇 Music: Off';
   $('mbGfx').textContent='✨ Graphics: '+QNAME[QUAL];
   document.querySelectorAll('[data-act="music"]').forEach(b=>{ if(b.id!=='mbMusic') b.textContent=musicOn?'🎵 Music: On':'🔇 Music: Off'; });
+  document.querySelectorAll('[data-act="timer"]').forEach(b=>{ b.textContent=timerOn?'⏱️ Timer: On':'⏱️ Timer: Off'; });
 }
+/* calm mode: no countdown (lives are still lost on wrong letters) */
+function toggleTimer(){ timerOn=!timerOn; try{ localStorage.setItem('sh_timer',timerOn?'on':'off'); }catch(e){} toast(timerOn?'Timer on ⏱️':'Timer off - take your time 😌'); updateMenuLabels(); updateTimerBar(); }
 function toggleMusic(){ musicOn=!musicOn; try{ localStorage.setItem('sh_music',musicOn?'on':'off'); }catch(e){} toast(musicOn?'Music on 🎵':'Music off'); try{ Music.update(); }catch(err){} updateMenuLabels(); }
 function cycleGfx(){ setQuality(QUAL==='balanced'?'high':QUAL==='high'?'low':'balanced',true); updateMenuLabels(); }
 
@@ -144,7 +181,7 @@ $('wIn').addEventListener('input',()=>{ const w=cleanWord($('wIn').value); $('eI
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]'); if(!b) return; e.preventDefault(); b.blur(); audio();
   const a=b.dataset.act;
-  if(a==='music') toggleMusic(); else if(a==='gfx') cycleGfx(); else if(a==='words'){ if(G.state==='select') openWords(); } else onInput(a);
+  if(a==='music') toggleMusic(); else if(a==='timer') toggleTimer(); else if(a==='gfx') cycleGfx(); else if(a==='words'){ if(G.state==='select') openWords(); } else onInput(a);
 });
 $('shopGrid').addEventListener('click',e=>{ const it=e.target.closest('[data-i]'); if(!it) return; const i=+it.dataset.i;
   if(i===shopIdx) shopAct(); else { shopIdx=i; SFX.swap(); renderShop(); } });
@@ -211,6 +248,7 @@ function resetRigPose(rig){
 }
 function hideRunUi(){
   ['banner','sticker','callout'].forEach(id=>$(id).classList.remove('show')); $('prompt').style.display='none'; $('flash').style.opacity=0;
+  stopTimer();
   document.querySelectorAll('.popt,.fly,.cdot').forEach(e=>e.remove());
 }
 /* Back to the hero select screen WITHOUT reloading the page: stop everything the run was doing, remove what it built, and put the world back at the start. */
@@ -222,7 +260,7 @@ function resetToSelect(){
   if(G.chest){ try{ G.chest.ch.root.dispose(); }catch(e){} }
   sweepScene();
   G.boss=null; G.chest=null; G.cur=null; G.rec=null; G.rig=null; G.lock=true; G.sumDone=null; G.wordDone=false; G.again={};
-  G.combo=0; setCombo(); G.shake=0; camPunch=0; G.hover=-1; G.pool=[]; G.results=[];
+  G.combo=0; setCombo(); G.shake=0; camPunch=0; G.hover=-1; G.pool=[]; G.results=[]; G.lives=LIVES_PER_BOSS; G.blanks=[];
   hideRunUi(); $('hud').style.display='';
   G.rigs.forEach(r=>{ resetRigPose(r); r.root.rotation.y=PI; r.root.scaling.setAll(1); });
   aura.emitRate=0; streak.emitRate=0;
@@ -244,7 +282,7 @@ async function retryWord(){
   G.dummies.forEach(d=>{ try{ disposeDummy(d); }catch(e){} }); G.dummies=[];
   resetRigPose(G.rig); hideRunUi();
   if(G.wordDone){ await nextWord(); return; }                      // the word was already finished: just carry on with the next one
-  G.idx=0; G.wordMistakes=0; G.wrongRow=0; if(!G.rec) G.rec={w:G.cur.w,e:G.cur.e,miss:[]};
+  G.idx=G.blanks[0]; G.wordMistakes=0; G.wrongRow=0; if(!G.rec) G.rec={w:G.cur.w,e:G.cur.e,miss:[]};
   renderWord(); await spawnOptions();
 }
 
@@ -259,7 +297,7 @@ async function startRun(){
   await startLevel();
 }
 async function startLevel(){
-  G.state='play'; G.lock=true; G.bossHP=WORDS_PER_LEVEL; G.results=[]; refreshStats();
+  G.state='play'; G.lock=true; G.bossHP=WORDS_PER_LEVEL; G.results=[]; G.lives=LIVES_PER_BOSS; renderLives(); stopTimer(); refreshStats();
   const mk=BOSSES[(G.level-1)%BOSSES.length], rig0=G.rig; const boss=await mk();       // a boss can be a .glb model, which loads asynchronously
   if(!G.rig||G.rig!==rig0){ boss.dispose(); return; }                                  // the player went back to hero select while it was loading
   G.boss=boss; G.boss.root.position.set(G.rig.root.position.x+30,0,1.8);
@@ -292,7 +330,7 @@ function requeueWord(w){
 }
 async function nextWord(){
   if(!G.pool.length) G.pool=buildPool(G.cur&&G.cur.w);
-  G.cur=G.pool.pop(); G.idx=0; G.wordMistakes=0; G.wrongRow=0; G.wordDone=false; G.rec={w:G.cur.w,e:G.cur.e,miss:[]}; renderWord();
+  G.cur=G.pool.pop(); G.blanks=pickBlanks(G.cur.w); G.idx=G.blanks[0]; G.wordMistakes=0; G.wrongRow=0; G.wordDone=false; G.rec={w:G.cur.w,e:G.cur.e,miss:[]}; renderWord();
   setTimeout(()=>sayWord(G.cur.w),250);
   await spawnOptions();
 }
@@ -310,7 +348,7 @@ async function spawnOptions(){
   G.lock=true; G.dummies=[]; const opts=makeOptions(), x0=G.rig.root.position.x; G.x0=x0;
   const jobs=opts.map((l,i)=>{ const d=makeDummy(l,i); d.root.position.set(x0+3.3+i*2.45,0,0); d.root.scaling.setAll(.001); G.dummies.push(d);
     return (async()=>{ await wait(i*90); SFX.pop(); await tween(380,k=>d.root.scaling.setAll(Math.max(.001,k)),E.back); })(); });
-  await Promise.all(jobs); G.lock=false; G.state='play';
+  await Promise.all(jobs); G.lock=false; G.state='play'; startTimer();
 }
 async function dashTo(rig,x,ms=320){
   const x0=rig.root.position.x; rig.moving=true; rig.dashing=x>x0;
@@ -319,7 +357,7 @@ async function dashTo(rig,x,ms=320){
 }
 async function pick(i){
   if(G.state!=='play'||G.lock) return; const d=G.dummies[i]; if(!d||!d.alive) return;
-  G.lock=true;
+  G.lock=true; stopTimer();
   if(d.letter===G.cur.w[G.idx]) await correct(d); else await wrong(d);
 }
 async function launchDummy(d){
@@ -330,7 +368,7 @@ async function launchDummy(d){
 async function wrong(d){
   const rig=G.rig, x0=rig.root.position.x; G.combo=0; setCombo(); G.wordMistakes++; G.wrongRow++;
   if(G.rec) G.rec.miss.push({i:G.idx,l:d.letter});
-  SFX.wrong(); SFX.whoosh(); Music.stinger('wrong');
+  SFX.wrong(); SFX.whoosh(); Music.stinger('wrong'); loseLife();
   await dashTo(rig,d.root.position.x-1.75,260);
   let mv; do{ mv=rnd(rig.hero.moves); }while(mv===rig.lastMove&&rig.hero.moves.length>1); rig.lastMove=mv;
   const tp=d.root.position.clone(); tp.y=1.6;
@@ -343,10 +381,31 @@ async function wrong(d){
   await dashTo(rig,x0,300);
   if(G.wrongRow>=2){ const c=G.dummies.find(x=>x.alive&&x.letter===G.cur.w[G.idx]); if(c) c.hint=true; }
   G.boss&&G.boss.laugh();
-  G.lock=false;
+  if(G.lives<=0){ await gameOver(); return; }
+  remindWord(); G.lock=false; startTimer();
+}
+/* the 20 seconds ran out: lose a life, hear the word again, same signs, fresh 20 seconds */
+async function timeUp(){
+  G.combo=0; setCombo(); G.wordMistakes++; G.wrongRow++;
+  if(G.rec) G.rec.miss.push({i:G.idx,l:'⏰'});
+  SFX.wrong(); Music.stinger('wrong'); loseLife(); callout('⏰ Time is up!','#ff6b6b'); G.shake=.25;
+  if(G.boss) await G.boss.laugh();
+  if(G.lives<=0){ await gameOver(); return; }
+  if(G.wrongRow>=2){ const c=G.dummies.find(x=>x.alive&&x.letter===G.cur.w[G.idx]); if(c) c.hint=true; }
+  remindWord(); G.lock=false; startTimer();
+}
+/* out of lives: the boss wins this round. Show the report (so the words can be practised), then back to hero select. */
+async function gameOver(){
+  G.state='busy'; G.lock=true; stopTimer();
+  if(G.rec){ G.results.push(G.rec); G.rec=null; }          // the word you were on counts too...
+  if(G.cur){ save.weak[G.cur.w]=Math.min(5,weakOf(G.cur.w)+1); persist(); }       // ...and it goes on the "needs practice" list
+  SFX.skull(); await banner('Oh no!','The boss wins this time... 😈',2200);
+  await showSummary(true);
+  resetToSelect();
 }
 async function correct(d){
   const rig=G.rig; G.combo++; setCombo(); G.wrongRow=0; d.alive=false;
+  if(G.combo%5===0&&G.lives<LIVES_PER_BOSS){ G.lives++; renderLives(); popText('+1 💚',rig.root.position.add(V3(0,3.4,0)),'#2fbf80'); }     // every 5 right in a row wins a life back
   if(G.combo===3) callout('🔥 ON FIRE!'); else if(G.combo===5) callout('⚡ SUPER COMBO!','#ffe066'); else if(G.combo===8) callout('🌟 UNSTOPPABLE!','#9fe8ff');
   const mult=Math.min(G.combo,5); SFX.ding(G.idx); sayLetter(d.letter); SFX.coin();
   const from=toScreen(d.root.position.add(V3(0,3,0))); const slot=$('slot'+G.idx);
@@ -360,9 +419,11 @@ async function correct(d){
   const others=G.dummies.filter(o=>o!==d);
   tween(300,k=>{ d.root.scaling.setAll(1+Math.sin(k*PI)*.3); d.root.rotation.y=k*PI*2; });
   others.forEach(o=>tween(300,k=>o.root.scaling.setAll(Math.max(.001,1-k)),E.in).then(()=>disposeDummy(o)));
-  SFX.pop(); await letterFly; G.idx++; renderWord();
+  SFX.pop(); await letterFly;
+  const nb=G.blanks.find(b=>b>G.idx); G.idx=nb===undefined?G.cur.w.length:nb; renderWord();     // on to the next blank (letters that are already filled in are skipped)
   await wait(100); tween(260,k=>d.root.scaling.setAll(Math.max(.001,1-k)),E.in).then(()=>disposeDummy(d));
   if(G.idx>=G.cur.w.length){ await wordComplete(); return; }
+  const wd=G.cur; wait(350).then(()=>{ if(G.cur===wd) remindWord(); });          // after the letter name: say the word again
   rig.cheer=true; await wait(520); rig.cheer=false;
   await dashTo(rig,rig.root.position.x+STEP,STEP*125); await spawnOptions();
 }
@@ -413,19 +474,22 @@ async function wordComplete(){
 }
 
 /* ---------------- spelling report after each boss ---------------- */
-function showSummary(){
+function showSummary(lost){
   return new Promise(res=>{
     const R=G.results, total=R.reduce((s,r)=>s+r.miss.length,0), perfect=R.filter(r=>!r.miss.length).length;
-    $('sumTitle').textContent=`📜 Level ${G.level} Spelling Report`;
+    $('sumTitle').textContent=lost?`💔 Level ${G.level} - out of lives!`:`📜 Level ${G.level} Spelling Report`;
+    $('summary').querySelector('[data-act="A"]').textContent=lost?'🏠 Back to heroes':'🎁 Open the treasure!';
     $('sumStats').innerHTML=`🌟 <b>${perfect}</b> perfect &nbsp;·&nbsp; 💀 <b>${total}</b> mistake${total===1?'':'s'}`;
     $('sumList').innerHTML=R.map((r,ri)=>{
       const letters=[...r.w].map((ch,i)=>{ const bad=r.miss.filter(m=>m.i===i);
         return `<span class="lt${bad.length?' bad':''}">${esc(ch)}${bad.length?`<small>${bad.map(m=>esc(m.l)).join(' ')}</small>`:''}</span>`; }).join('');
       const n=r.miss.length, skulls=n?(n>8?'💀 x'+n:'💀'.repeat(n)):'✅';
       return `<div class="srow ${n?'wrong':'ok'}" style="--i:${ri}"><span class="em">${esc(r.e)}</span><span class="wd">${letters}</span><span class="sk">${skulls}</span></div>`; }).join('');
-    $('sumNote').textContent=total?'Red letters = where you slipped (the small letters show what you picked)':'WOW! Every word spelled perfectly!';
+    $('sumNote').textContent=lost?'Red letters = where you slipped (the small letters show what you picked, ⏰ = time ran out). Practise these and come back!'
+      :total?'Red letters = where you slipped (the small letters show what you picked, ⏰ = time ran out)':'WOW! Every word spelled perfectly!';
     G.state='summary'; G.sumDone=res; setScreens('summary'); updateMenuLabels();
-    if(!total){ SFX.perfect(); setTimeout(()=>say('Perfect spelling! Amazing!',.9),300); }
+    if(lost){ setTimeout(()=>say('Good try! Let us practise these words, and try again.',.85),300); }
+    else if(!total){ SFX.perfect(); setTimeout(()=>say('Perfect spelling! Amazing!',.9),300); }
     else { R.forEach((r,ri)=>{ if(r.miss.length) setTimeout(()=>SFX.skull(),350+ri*150); }); setTimeout(()=>say('Great job! Here are your words.',.9),300); }
   });
 }

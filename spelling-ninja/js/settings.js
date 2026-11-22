@@ -16,7 +16,12 @@ const DEFAULT_WORDS = [
   {w:'may',   e:'🙋'},
 ];
 const WORDS = DEFAULT_WORDS.map(o=>({...o}));   // the live list (edited from the Words screen)
-let WORDS_PER_LEVEL = 5;       // words to beat one boss (changeable on the Words screen)
+let WORDS_PER_LEVEL = 4;       // words to beat one boss = the boss's hearts (changeable on the Words screen)
+const LIVES_PER_BOSS = 3;      // your lives in each boss round: a wrong letter or a timeout costs one
+const LETTER_TIME = 20;        // seconds to choose each letter (can be switched off: menu bar -> Timer)
+/* Levels 1-3 only blank part of the word (the rest is already filled in); from level 4 on the whole word has to be spelled.
+   Vowels are blanked first, because they are the tricky part (ee, ay, ai...). */
+const BLANK_SHARE = [.34,.55,.8];
 const STEP = 8;                // how far the hero walks after each letter
 
 /* Wrong-letter choices. For each letter: the letters kids really mix it up with, most confusing first.

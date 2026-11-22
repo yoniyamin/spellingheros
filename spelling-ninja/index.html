@@ -12,7 +12,9 @@
 <div id="hud">
   <div id="stats" class="chip">🪙 <span id="coins">0</span> &nbsp; ⭐ <span id="stars">0</span> &nbsp; Lv <span id="lvl">1</span>
     <button id="pauseBtn" class="hb" data-act="start" title="Pause">⏸</button></div>
-  <div id="wordbox"><div id="emoji"></div><div id="blanks"></div><button id="speak" data-act="R1" title="Hear the word again">🔊</button></div>
+  <div id="livesbox" class="chip" title="Your lives">💚💚💚</div>
+  <div id="wordbox"><div id="emoji"></div><div id="blanks"></div><button id="speak" data-act="R1" title="Hear the word again">🔊</button>
+    <div id="timer"><i></i></div></div>
   <div id="bossbox" class="chip"><div id="bossName"></div><div id="hearts"></div></div>
   <div id="combo"></div>
   <div id="hintbar" class="chip"></div>
@@ -36,6 +38,7 @@
     <button class="mb" data-act="Y">👗 Wardrobe</button>
     <button class="mb" data-act="X">🏆 Trophies</button>
     <button class="mb" data-act="music" id="mbMusic">🎵 Music: On</button>
+    <button class="mb" data-act="timer" id="mbTimer">⏱️ Timer: On</button>
     <button class="mb" data-act="gfx" id="mbGfx">✨ Graphics</button>
   </div>
   <div class="top">Choose your hero!</div>
@@ -96,9 +99,9 @@
     <div class="btncol">
       <button class="btn lg go" data-act="A">▶ Keep playing</button>
       <button class="btn" data-act="B">🏠 Back to hero select</button>
-      <div class="btnrow"><button class="btn sm" data-act="music">🎵 Music</button><button class="btn sm" data-act="gfx">✨ Graphics</button></div>
+      <div class="btnrow"><button class="btn sm" data-act="music">🎵 Music</button><button class="btn sm" data-act="timer">⏱️ Timer</button><button class="btn sm" data-act="gfx">✨ Graphics</button></div>
     </div>
-    <div class="keys"><span class="b-x">✕</span> keep playing · <span class="b-o">○</span> hero select · M = music · G = graphics quality</div>
+    <div class="keys"><span class="b-x">✕</span> keep playing · <span class="b-o">○</span> hero select · M = music · T = timer · G = graphics quality</div>
   </div>
 </div>
 
