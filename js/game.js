@@ -263,7 +263,7 @@ function resetToSelect(){
   G.combo=0; setCombo(); G.shake=0; camPunch=0; G.hover=-1; G.pool=[]; G.results=[]; G.lives=LIVES_PER_BOSS; G.blanks=[];
   hideRunUi(); $('hud').style.display='';
   G.rigs.forEach(r=>{ resetRigPose(r); r.root.rotation.y=PI; r.root.scaling.setAll(1); });
-  aura.emitRate=0; streak.emitRate=0;
+  setEmit(aura,0); setEmit(streak,0);
   G.camX=0; SEGS.forEach((s,i)=>{ s.position.x=i*4-24; });                // the corridor scrolls forever, so put it back where it started
   enterSelect();
 }

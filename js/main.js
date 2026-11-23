@@ -8,15 +8,23 @@
 HEROES.forEach(h=>{ const r=makeRig(h); r.root.rotation.y=PI; G.rigs.push(r); });
 G.rigs.forEach(r=>{ if(r.hero.glb) upgradeRigToGlb(r); });     // swaps in the 3D model when it has loaded (async); the box hero is the fallback
 G.camTarget=0; layoutSelect(); fit(); setQuality(QUAL); try{ G.qualFixed=!!localStorage.getItem('sh_q2'); }catch(e){}
-let lastTick=performance.now(), fpsAcc=0, fpsN=0, fpsT=0;
+let lastTick=performance.now(), fpsAcc=0, fpsN=0, fpsT=0, goodWindows=0;
 scene.onBeforeRenderObservable.add(()=>{
   const dtr=Math.min(engine.getDeltaTime()||16,50), dt=dtr*slowMul; G.t+=dt/1000;
   pollPad(); stepTweens(dt);
   camPunch*=Math.exp(-dtr/120); camera.fov=baseFov*(1-camPunch*.09);
-  // auto-detect slow computers: every ~6 s of play, if below 28 fps step the graphics down one level (until Low)
-  if(G.state==='play'&&!G.qualFixed&&QUAL!=='low'){ fpsT+=dtr; fpsAcc+=dtr; fpsN++;
-    if(fpsT>6000){ const fps=1000/(fpsAcc/fpsN); fpsT=0; fpsAcc=0; fpsN=0;
-      if(fps<28){ const nq=QUAL==='high'?'balanced':'low'; setQuality(nq); updateMenuLabels(); toast('Graphics set to '+QNAME[nq]+' for smoother play (press G to change)'); } else G.qualFixed=true; } }
+  /* continuous auto-quality (previously a single one-shot check that then locked itself off forever):
+     every ~4 s of gameplay, below 28 fps it first renders at fewer pixels (dynScale 1 -> 1.15 -> 1.3,
+     which keeps all the pretty features) and only then drops a whole quality level; above 55 fps for
+     three checks in a row it gives the sharpness back, so one busy finisher never ruins the picture.
+     A quality the player picked themselves (G key / saved setting) is never touched. */
+  if((G.state==='play'||G.state==='busy'||G.state==='chest')&&!G.qualFixed){ fpsT+=dtr; fpsAcc+=dtr; fpsN++;
+    if(fpsT>4000){ const fps=1000/(fpsAcc/fpsN); fpsT=0; fpsAcc=0; fpsN=0;
+      if(fps<28){ goodWindows=0;
+        if(dynScale<1.29) setDynScale(dynScale*1.15);
+        else if(QUAL!=='low'){ const nq=QUAL==='high'?'balanced':'low'; setQuality(nq); updateMenuLabels(); toast('Graphics set to '+QNAME[nq]+' for smoother play (press G to change)'); } }
+      else if(fps>55&&dynScale>1){ if(++goodWindows>=3){ goodWindows=0; setDynScale(dynScale/1.15); } }
+      else goodWindows=0; } }
   if((G.frame=(G.frame||0)+1)%12===0){ try{ Music.update(); }catch(e){} }
   if(paused) return;
   tickLetterTimer(dt);
@@ -32,11 +40,11 @@ scene.onBeforeRenderObservable.add(()=>{
   SEGS.forEach(s=>{ if(s.position.x<G.camX-26) s.position.x+=SEGN*4; });
   dust.emitter.x=G.camX; petals.emitter.x=G.camX+2; floor.position.x=Math.round((G.camX+14)/4)*4;
   sun.position.set(G.camX+4-sunDir.x*30,-sunDir.y*30,-1-sunDir.z*30);
-  if(G.rig){ const rp=G.rig.root.position; streak.emitter.x=rp.x-.3; streak.emitter.y=rp.y; streak.emitter.z=rp.z; streak.emitRate=G.rig.dashing?90:0; }
-  else streak.emitRate=0;
+  if(G.rig){ const rp=G.rig.root.position; streak.emitter.x=rp.x-.3; streak.emitter.y=rp.y; streak.emitter.z=rp.z; setEmit(streak,G.rig.dashing?90:0); }
+  else setEmit(streak,0);
   // combo aura: flames around the hero from combo x3
-  if(G.rig&&document.body.classList.contains('playing')){ const rp=G.rig.root.position; aura.emitter.set(rp.x,rp.y,rp.z); aura.emitRate=G.combo>=3?(QUAL==='low'?25:(G.combo>=5?90:55)):0; }
-  else aura.emitRate=0;
+  if(G.rig&&document.body.classList.contains('playing')){ const rp=G.rig.root.position; aura.emitter.set(rp.x,rp.y,rp.z); setEmit(aura,G.combo>=3?(QUAL==='low'?25:(G.combo>=5?90:55)):0); }
+  else setEmit(aura,0);
   if(G.boss){ const b=G.boss, tx=G.rig.root.position.x+13.6; b.root.position.x+=(tx-b.root.position.x)*(1-Math.exp(-dt/450)); b.root.position.y=b.grounded?0:Math.sin(G.t*2)*.18+.1; if(b.idle) b.idle(G.t);   // grounded bosses (with feet) stay on the floor
     if(!G.bossArrived&&Math.abs(tx-b.root.position.x)<1.5){ G.bossArrived=true; G.shake=.8; camPunch=.5; SFX.thud();
       burst(V3(b.root.position.x,.3,-1.5),{tex:'dot',count:40,power:6,size:.9,c1:[1,1,1],c2:[.8,.85,1],life:1.2,grav:-1}); shock(V3(b.root.position.x,.4,-2),{size:12,ms:700}); }

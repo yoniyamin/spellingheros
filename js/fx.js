@@ -33,12 +33,25 @@ function emojiMat(ch){
 function emojiPlane(ch,size,par){ const p=BABYLON.MeshBuilder.CreatePlane('emo',{size},scene); p.material=emojiMat(ch); p.isPickable=false; if(par) p.parent=par; return p; }
 
 /* ---------------- small building blocks ---------------- */
-/* a flat picture facing the camera that grows and fades */
+/* a flat picture facing the camera that grows and fades (pooled planes/materials like shock() in engine.js;
+   a throwaway plane is used when every pooled one is already on screen) */
+const fxPool=[];
 function fxPlane(tex,pos,{color='#ffffff',size=3,ms=380,rot=0,spin=0,from=.3,flat=false}={}){
-  const p=BABYLON.MeshBuilder.CreatePlane('fx',{size:1},scene), m=new BABYLON.StandardMaterial('fxm',scene);
-  m.diffuseTexture=tex; m.useAlphaFromDiffuseTexture=true; m.emissiveColor=BABYLON.Color3.FromHexString(color); m.disableLighting=true; m.backFaceCulling=false;
-  p.material=m; p.position.copyFrom(pos); p.isPickable=false; if(flat) p.rotation.x=PI/2; else p.rotation.z=rot;
-  return tween(ms,k=>{ const s=from+k*size; p.scaling.set(s,s,s); m.alpha=1-k*k; if(spin) p.rotation.z=rot+spin*k; },E.out).then(()=>{ m.dispose(); p.dispose(); });
+  for(let i=fxPool.length-1;i>=0;i--) if(fxPool[i].p.isDisposed()) fxPool.splice(i,1);   // resetToSelect() sweeps planes made during a run
+  let item=fxPool.find(i=>!i.busy);
+  if(!item&&fxPool.length<8){
+    const p=BABYLON.MeshBuilder.CreatePlane('fx',{size:1},scene), m=new BABYLON.StandardMaterial('fxm',scene);
+    m.useAlphaFromDiffuseTexture=true; m.disableLighting=true; m.backFaceCulling=false;
+    p.material=m; p.isPickable=false; p.isVisible=false; item={p,m,busy:false}; fxPool.push(item);
+  }
+  if(!item){ const p=BABYLON.MeshBuilder.CreatePlane('fx',{size:1},scene), m=new BABYLON.StandardMaterial('fxm',scene);
+    m.diffuseTexture=tex; m.useAlphaFromDiffuseTexture=true; m.emissiveColor=BABYLON.Color3.FromHexString(color); m.disableLighting=true; m.backFaceCulling=false;
+    p.material=m; p.position.copyFrom(pos); p.isPickable=false; if(flat) p.rotation.x=PI/2; else p.rotation.z=rot;
+    return tween(ms,k=>{ const s=from+k*size; p.scaling.set(s,s,s); m.alpha=1-k*k; if(spin) p.rotation.z=rot+spin*k; },E.out).then(()=>{ m.dispose(); p.dispose(); }); }
+  item.busy=true; const {p,m}=item;
+  p.isVisible=true; p.position.copyFrom(pos); p.rotation.set(flat?PI/2:0,0,flat?0:rot);
+  m.diffuseTexture=tex; m.emissiveColor=BABYLON.Color3.FromHexString(color); m.alpha=1;
+  return tween(ms,k=>{ const s=from+k*size; p.scaling.set(s,s,s); m.alpha=1-k*k; if(spin) p.rotation.z=rot+spin*k; },E.out).then(()=>{ p.isVisible=false; item.busy=false; });
 }
 const slashFx=(pos,color='#ffffff')=>{ SFX.slash(); return fxPlane(TEX.slash,pos.add(V3(0,0,-.7)),{color,size:3.4,ms:260,rot:Math.random()*PI*2,from:1.2}); };
 const powFx  =pos=>fxPlane(TEX.pow,pos.add(V3(0,0,-.8)),{size:2.2,ms:320,rot:(Math.random()-.5)*.6,from:.4});
@@ -99,7 +112,7 @@ function hitFx(pos){
 }
 
 /* ---------------- combo aura: flames around the hero at combo x3+ ---------------- */
-const aura=new BABYLON.ParticleSystem('aura',160,scene);
+const aura=new BABYLON.ParticleSystem('aura',96,scene);
 aura.particleTexture=TEX.dot; aura.emitter=V3(0,-50,0); aura.minEmitBox=V3(-.55,0,-.55); aura.maxEmitBox=V3(.55,2.6,.55);
 aura.direction1=V3(-.2,1,-.2); aura.direction2=V3(.2,2,.2); aura.minEmitPower=.6; aura.maxEmitPower=1.5; aura.updateSpeed=.02;
 aura.minLifeTime=.3; aura.maxLifeTime=.65; aura.minSize=.25; aura.maxSize=.6; aura.emitRate=0; aura.start();

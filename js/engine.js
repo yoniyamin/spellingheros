@@ -25,7 +25,7 @@ const sun = new BABYLON.DirectionalLight('d',sunDir.clone(),scene); sun.intensit
 let pipe=null;
 try{
   pipe = new BABYLON.DefaultRenderingPipeline('dp',true,scene,[camera]);
-  pipe.fxaaEnabled=true; pipe.bloomEnabled=true; pipe.bloomThreshold=.95; pipe.bloomWeight=.22; pipe.bloomKernel=32; pipe.bloomScale=.3;
+  pipe.fxaaEnabled=false; pipe.bloomEnabled=true; pipe.bloomThreshold=.95; pipe.bloomWeight=.22; pipe.bloomKernel=16; pipe.bloomScale=.3;   // no FXAA pass: the engine's own MSAA is enough, and bloom is kept small/cheap
   pipe.imageProcessingEnabled=true;
   const ip=pipe.imageProcessing; ip.vignetteEnabled=true; ip.vignetteWeight=2.4; ip.vignetteColor=new BABYLON.Color4(.35,.38,.75,0);
   ip.contrast=1.12; ip.exposure=.92;
@@ -42,20 +42,20 @@ function fit(){
 window.addEventListener('resize',fit);
 
 /* ---------------- lighting FX: soft shadows, glossy floor ---------------- */
-/* quality levels: 'balanced' (default: shadows + light bloom), 'high' (adds live floor reflection), 'low' (no shadows/bloom) */
+/* quality levels: 'balanced' (default: blob shadows only), 'high' (real shadows + live floor reflection + bloom), 'low' (cheapest, lower resolution) */
 let QUAL='balanced'; try{ const q=localStorage.getItem('sh_q2'); if(q==='high'||q==='low'||q==='balanced') QUAL=q; }catch(e){}
 sun.autoUpdateExtends=false; sun.autoCalcShadowZBounds=false;
 sun.orthoLeft=-17; sun.orthoRight=17; sun.orthoBottom=-11; sun.orthoTop=11; sun.shadowMinZ=1; sun.shadowMaxZ=70;
 const shadowGen=new BABYLON.ShadowGenerator(512,sun);
-shadowGen.usePoissonSampling=true; shadowGen.bias=.002; shadowGen.setDarkness(.4);
+shadowGen.usePoissonSampling=false; shadowGen.bias=.002; shadowGen.setDarkness(.4);   // plain PCF is much cheaper than Poisson sampling; only used on High (see setQuality)
 const mirrorList=[]; let REG=false;
 function reg(o){                       // register a mesh as a shadow caster + floor reflection
   if(!REG||!o.material||o.material.alpha<1) return;
   if(!o.material.disableLighting) shadowGen.addShadowCaster(o);
   mirrorList.push(o); o.onDisposeObservable.add(()=>{ const i=mirrorList.indexOf(o); if(i>=0) mirrorList.splice(i,1); });
 }
-const mirror=new BABYLON.MirrorTexture('mir',256,scene,true);
-mirror.mirrorPlane=new BABYLON.Plane(0,-1,0,0); mirror.renderList=mirrorList; mirror.level=.3; mirror.adaptiveBlurKernel=8;
+const mirror=new BABYLON.MirrorTexture('mir',128,scene,true);
+mirror.mirrorPlane=new BABYLON.Plane(0,-1,0,0); mirror.renderList=mirrorList; mirror.level=.3; mirror.adaptiveBlurKernel=0;   // 128px, no blur pass: the floor is glossy, not a real mirror
 let toastT=null;
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
@@ -83,11 +83,16 @@ const shadowMat=(()=>{ const m=new BABYLON.StandardMaterial('shadow',scene); m.d
   m.emissiveColor=BABYLON.Color3.FromHexString('#2c3086'); m.alpha=.16; return m; })();
 function blob(par,r){ const s=BABYLON.MeshBuilder.CreateDisc('sh',{radius:r,tessellation:28},scene); s.rotation.x=PI/2; s.position.y=.025;
   s.parent=par; s.material=shadowMat; s.isPickable=false; return s; }
-/* cartoon outline for toy-like characters */
+/* cartoon outline for toy-like characters. Every outlined mesh is drawn a second time by Babylon's
+   outline renderer, so: tiny details (< ~18cm) skip it (they only produced a coloured smudge - the pig's
+   eyelids being the worst case), meshes can opt out with _noOutline, and Low quality turns it off entirely. */
 const OUTC=BABYLON.Color3.FromHexString('#2b2f78');
+const outlinedMeshes=[];
 function outlineNode(n,w=.022,skip){
-  n.getChildMeshes().forEach(m=>{ const mt=m.material; if(!mt||mt.alpha<1||mt.disableLighting||mt.diffuseTexture||m===skip) return;
-    m.renderOutline=true; m.outlineWidth=w; m.outlineColor=OUTC; });
+  n.getChildMeshes().forEach(m=>{ const mt=m.material; if(!mt||mt.alpha<1||mt.disableLighting||mt.diffuseTexture||m===skip||m._noOutline) return;
+    try{ const ext=m.getBoundingInfo().boundingBox.extendSizeWorld; if(Math.max(ext.x,ext.y,ext.z)*2<.18) return; }catch(e){}
+    m.renderOutline=QUAL!=='low'; m.outlineWidth=w; m.outlineColor=OUTC;
+    if(!outlinedMeshes.includes(m)) outlinedMeshes.push(m); });
 }
 
 /* ---------------- particle textures ---------------- */
@@ -98,16 +103,32 @@ const TEX={
   heart:mkTex(c=>{c.fillStyle='#fff';c.beginPath();c.moveTo(32,56);c.bezierCurveTo(2,36,6,8,32,22);c.bezierCurveTo(58,8,62,36,32,56);c.fill();}),
   bubble:mkTex(c=>{c.strokeStyle='#fff';c.lineWidth=5;c.beginPath();c.arc(32,32,24,0,7);c.stroke();c.fillStyle='rgba(255,255,255,.35)';c.fill();c.fillStyle='#fff';c.beginPath();c.arc(23,23,5,0,7);c.fill();}),
 };
+/* set a continuous particle system's rate, fully stopping it at 0: Babylon keeps animating/rendering
+   a started system even when emitRate is 0, so "off" should mean stopped, not just silent */
+function setEmit(ps,rate){
+  ps.emitRate=rate;
+  if(rate>0){ if(ps._off){ ps._off=false; try{ ps.start(); }catch(e){} } }
+  else if(!ps._off){ ps._off=true; try{ ps.stop(); }catch(e){} }
+}
+/* one-shot bursts are pooled (8 systems, reused via stop()+reset()+start()): creating and disposing a
+   ParticleSystem on every hit allocated GPU buffers and caused the little hitches on hits/finishers.
+   If all 8 are busy at once (a mega finisher), the old create-and-dispose path is used as a fallback. */
+const burstPool=[];
 function burst(pos,{tex='star',count=34,c1=[1,.82,.2],c2=[1,.5,.7],power=7,life=1,size=.55,grav=-7,sphere=false,std=false}={}){
-  const n=QUAL==='low'?Math.ceil(count*.5):count;
-  const ps=new BABYLON.ParticleSystem('burst',n+8,scene); ps.particleTexture=TEX[tex]||tex; ps.emitter=pos.clone();
+  const n=Math.min(QUAL==='low'?Math.ceil(count*.5):count,128);
+  let item=burstPool.find(i=>!i.busy);
+  if(!item&&burstPool.length<8){ item={ps:new BABYLON.ParticleSystem('burstPool',128,scene),busy:false}; burstPool.push(item); }
+  const pooled=!!item, ps=pooled?item.ps:new BABYLON.ParticleSystem('burst',n+8,scene);
+  if(pooled){ item.busy=true; try{ ps.stop(); ps.reset(); }catch(e){} }
+  ps.particleTexture=TEX[tex]||tex; ps.emitter=pos.clone();
   ps.color1=new BABYLON.Color4(c1[0],c1[1],c1[2],1); ps.color2=new BABYLON.Color4(c2[0],c2[1],c2[2],1); ps.colorDead=new BABYLON.Color4(c2[0],c2[1],c2[2],0);
   ps.minSize=size*.5; ps.maxSize=size; ps.minLifeTime=life*.5; ps.maxLifeTime=life; ps.emitRate=0; ps.manualEmitCount=n;
+  ps.minEmitBox=V3(0,0,0); ps.maxEmitBox=V3(0,0,0);
   if(sphere){ ps.direction1=V3(-1,-1,-1); ps.direction2=V3(1,1,1); } else { ps.direction1=V3(-1,.6,-1); ps.direction2=V3(1,2,1); }
   ps.minEmitPower=power*.4; ps.maxEmitPower=power; ps.updateSpeed=.02;
-  if(std) ps.blendMode=BABYLON.ParticleSystem.BLENDMODE_STANDARD;
+  ps.blendMode=std?BABYLON.ParticleSystem.BLENDMODE_STANDARD:BABYLON.ParticleSystem.BLENDMODE_ONEONE;
   ps.gravity=V3(0,grav,0); ps.minAngularSpeed=-4; ps.maxAngularSpeed=4; ps.targetStopDuration=life; ps.start();
-  killPS(ps,life*1000+400);
+  if(pooled) setTimeout(()=>{ item.busy=false; },life*1000+400); else killPS(ps,life*1000+400);
 }
 /* dispose a particle system later WITHOUT disposing its (shared) texture -
    "disposeOnStop" would also destroy the shared texture, so later bursts could vanish */
@@ -117,19 +138,32 @@ TEX.petal=mkTex(c=>{const g=c.createRadialGradient(32,32,2,32,32,26);g.addColorS
   c.fillStyle=g;c.save();c.translate(32,32);c.rotate(.6);c.scale(1,.5);c.translate(-32,-32);c.beginPath();c.arc(32,32,26,0,7);c.fill();c.restore();});
 TEX.streak=mkTex(c=>{const g=c.createLinearGradient(0,0,64,0);g.addColorStop(0,'rgba(255,255,255,0)');g.addColorStop(.7,'rgba(255,255,255,.85)');g.addColorStop(1,'rgba(255,255,255,1)');
   c.fillStyle=g;c.fillRect(0,26,64,12);});
-/* expanding impact ring that always faces the camera */
+/* expanding impact ring that always faces the camera (pooled planes/materials, same trick as burst();
+   falls back to a throwaway plane when every pooled ring is already on screen) */
+const shockPool=[];
 function shock(pos,{color='#ffffff',size=3,ms=380}={}){
-  const p=BABYLON.MeshBuilder.CreatePlane('shock',{size:1},scene), m=new BABYLON.StandardMaterial('shk',scene);
-  m.diffuseTexture=TEX.ring; m.useAlphaFromDiffuseTexture=true; m.emissiveColor=BABYLON.Color3.FromHexString(color); m.disableLighting=true; m.backFaceCulling=false;
-  p.material=m; p.billboardMode=BABYLON.Mesh.BILLBOARDMODE_ALL; p.position.copyFrom(pos); p.isPickable=false;
-  tween(ms,k=>{ const s=.3+k*size; p.scaling.set(s,s,s); m.alpha=1-k; },E.out).then(()=>{ m.dispose(); p.dispose(); });
+  for(let i=shockPool.length-1;i>=0;i--) if(shockPool[i].p.isDisposed()) shockPool.splice(i,1);   // resetToSelect() sweeps planes made during a run
+  let item=shockPool.find(i=>!i.busy);
+  if(!item&&shockPool.length<6){
+    const p=BABYLON.MeshBuilder.CreatePlane('shock',{size:1},scene), m=new BABYLON.StandardMaterial('shk',scene);
+    m.diffuseTexture=TEX.ring; m.useAlphaFromDiffuseTexture=true; m.disableLighting=true; m.backFaceCulling=false;
+    p.material=m; p.billboardMode=BABYLON.Mesh.BILLBOARDMODE_ALL; p.isPickable=false; p.isVisible=false;
+    item={p,m,busy:false}; shockPool.push(item);
+  }
+  if(!item){ const p=BABYLON.MeshBuilder.CreatePlane('shock',{size:1},scene), m=new BABYLON.StandardMaterial('shk',scene);
+    m.diffuseTexture=TEX.ring; m.useAlphaFromDiffuseTexture=true; m.emissiveColor=BABYLON.Color3.FromHexString(color); m.disableLighting=true; m.backFaceCulling=false;
+    p.material=m; p.billboardMode=BABYLON.Mesh.BILLBOARDMODE_ALL; p.position.copyFrom(pos); p.isPickable=false;
+    tween(ms,k=>{ const s=.3+k*size; p.scaling.set(s,s,s); m.alpha=1-k; },E.out).then(()=>{ m.dispose(); p.dispose(); }); return; }
+  item.busy=true; const {p,m}=item;
+  p.isVisible=true; p.position.copyFrom(pos); m.emissiveColor=BABYLON.Color3.FromHexString(color); m.alpha=1;
+  tween(ms,k=>{ const s=.3+k*size; p.scaling.set(s,s,s); m.alpha=1-k; },E.out).then(()=>{ p.isVisible=false; item.busy=false; });
 }
 /* hit-freeze: the game briefly crawls so big impacts feel heavy */
 let slowMul=1, slowT=null;
 function freeze(ms,scale=.04){ slowMul=scale; clearTimeout(slowT); slowT=setTimeout(()=>{ slowMul=1; },ms); }
 function flash(color='#ffffff',op=.55){ const f=$('flash'); f.style.transition='none'; f.style.background=color; f.style.opacity=op; void f.offsetWidth; f.style.transition='opacity .45s'; f.style.opacity=0; }
 /* speed streaks behind the hero while dashing */
-const streak=new BABYLON.ParticleSystem('streak',160,scene);
+const streak=new BABYLON.ParticleSystem('streak',96,scene);
 streak.particleTexture=TEX.streak; streak.emitter=V3(0,0,0); streak.billboardMode=BABYLON.ParticleSystem.BILLBOARDMODE_STRETCHED;
 streak.minEmitBox=V3(-.3,.1,-.9); streak.maxEmitBox=V3(.3,2.4,.9); streak.direction1=V3(-1,0,-.05); streak.direction2=V3(-1,.04,.05);
 streak.minEmitPower=14; streak.maxEmitPower=22; streak.minLifeTime=.16; streak.maxLifeTime=.3; streak.minSize=.6; streak.maxSize=1;
@@ -137,7 +171,7 @@ streak.minScaleX=3; streak.maxScaleX=6; streak.minScaleY=.06; streak.maxScaleY=.
 streak.color1=new BABYLON.Color4(.3,.34,.85,.65); streak.color2=new BABYLON.Color4(1,1,1,.8); streak.colorDead=new BABYLON.Color4(.3,.34,.85,0);
 streak.start();
 /* slow falling petals / light flakes for dreaminess */
-const petals=new BABYLON.ParticleSystem('petals',90,scene);
+const petals=new BABYLON.ParticleSystem('petals',56,scene);
 petals.particleTexture=TEX.petal; petals.emitter=V3(0,0,0); petals.minEmitBox=V3(-13,4,-4); petals.maxEmitBox=V3(13,6.5,6);
 petals.direction1=V3(-.5,-.5,0); petals.direction2=V3(.2,-.15,0); petals.minEmitPower=.3; petals.maxEmitPower=.8; petals.gravity=V3(0,-.12,0);
 petals.minSize=.22; petals.maxSize=.5; petals.minLifeTime=8; petals.maxLifeTime=13; petals.emitRate=8; petals.minAngularSpeed=-1.5; petals.maxAngularSpeed=1.5;

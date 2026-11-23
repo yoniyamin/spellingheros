@@ -124,7 +124,7 @@ const PIG_LEG=1, PIG_LEAN=1, PIG_TAP=1, PIG_LID=1;    // turn directions (+1 / -
    in the Head bone's space (x = side, y = up, z = forward, in model units): a glowing eyeball, a pupil that watches the hero and
    darts about, a highlight, and a grumpy slanted lid that blinks. */
 const PIG_EYE={x:.135,y:.11,z:.125,r:.056};
-const PIG_LID_REST=.3;                // how far the lids hang down when the pig is just glaring (0 = half the eyeball, PI/2 = shut)
+const PIG_LID_REST=-.3;               // how far the lids hang down when the pig is just glaring (negative = swung back off the eyeball, PI/2 = shut). Was .3, which already covered most of the eye at rest
 function pigEyes(head){
   const R=PIG_EYE.r, ball=GM('#ffb43a'), dark=GM('#1a0b12'), shine=GM('#ffffff'), lidM=M('#6a2230',.35);
   const list=[-1,1].map(s=>{
@@ -133,6 +133,7 @@ function pigEyes(head){
     const tilt=nd(c,0,0,0); tilt.rotation.z=s*.38;               // slanted towards the snout: a cross look
     const hinge=nd(tilt,0,0,0);
     const lid=BABYLON.MeshBuilder.CreateSphere('pigLid',{diameter:R*2.5,segments:14,slice:.5,sideOrientation:BABYLON.Mesh.DOUBLESIDE},scene);
+    lid._noOutline=true;   // tiny lid + the boss outline (.045 in model units, x3.8 scale) painted a thick blue "eyebrow" halo around it
     fin(lid,lidM,hinge,0,0,0); return {c,pupil,hinge,lx:0,ly:0};
   });
   const inv=new BABYLON.Matrix(), loc=new BABYLON.Vector3(), tgt=new BABYLON.Vector3();

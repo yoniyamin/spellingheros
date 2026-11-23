@@ -193,13 +193,13 @@ function updateRig(rig,dt){
   if(rig.cape) rig.cape.rotation.x=.12+mv*.7+Math.sin(t*3)*.05;
   if(rig.scarfTail){ rig.scarfTail.rotation.x=.2+mv+Math.sin(t*7)*.2; rig.scarfTail.rotation.z=Math.sin(t*5)*.15; }
   rig.spin.forEach(n=>n.rotation.y+=dt*.03);
-  if(rig.trailPS) rig.trailPS.emitRate=rig.moving?34:0;
+  if(rig.trailPS) setEmit(rig.trailPS,rig.moving?34:0);
   if(rig.backCape) rig.backCape.rotation.x=.15+mv*.9+Math.sin(t*3.4)*.08;
   if(rig.wings){ const f=rig.moving?Math.sin(t*16)*.5:Math.sin(t*3)*.18; rig.wings.forEach(w=>{ w.rotation.y=-w.side*(.35+f); }); }
   if(rig.petWings) rig.petWings.forEach(w=>{ w.rotation.z=w.side*Math.sin(t*14)*.6; });
   if(rig.pet){ rig.pet.position.y=2.9+Math.sin(t*3)*.16; rig.pet.rotation.y=Math.sin(t*1.3)*.4; rig.pet.rotation.z=Math.sin(t*2.1)*.08; }
   if(rig.halo) rig.halo.position.y=1+Math.sin(t*3)*.05;
-  if(rig.jetPS) rig.jetPS.emitRate=rig.moving||rig.busy?(QUAL==='low'?40:90):(QUAL==='low'?8:18);
+  if(rig.jetPS) setEmit(rig.jetPS,rig.moving||rig.busy?(QUAL==='low'?40:90):(QUAL==='low'?8:18));
 }
 
 /* =====================================================================

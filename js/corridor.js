@@ -104,23 +104,30 @@ const floor=BABYLON.MeshBuilder.CreateGround('floor',{width:120,height:22},scene
 floor.position.set(14,0,-5); floor.material=floorMat; floor.receiveShadows=true; floor.isPickable=false;
 
 /* dust motes */
-const dust=new BABYLON.ParticleSystem('dust',260,scene);
+const dust=new BABYLON.ParticleSystem('dust',130,scene);
 dust.particleTexture=TEX.dot; dust.emitter=V3(0,2,0); dust.minEmitBox=V3(-12,-1,-3); dust.maxEmitBox=V3(12,5,10);
 dust.direction1=V3(-.1,.05,0); dust.direction2=V3(.1,.3,0); dust.minEmitPower=.1; dust.maxEmitPower=.4;
-dust.minSize=.05; dust.maxSize=.16; dust.minLifeTime=6; dust.maxLifeTime=11; dust.emitRate=30;
+dust.minSize=.05; dust.maxSize=.16; dust.minLifeTime=6; dust.maxLifeTime=11; dust.emitRate=14;
 dust.color1=new BABYLON.Color4(1,1,1,.75); dust.color2=new BABYLON.Color4(.85,.88,1,.5); dust.colorDead=new BABYLON.Color4(1,1,1,0);
 dust.preWarmCycles=100; dust.preWarmStepOffset=10; dust.start();
 
 /* graphics quality: Balanced (default), High (adds live floor reflection), Low (for slow computers) */
 const QNAME={balanced:'Balanced',high:'High',low:'Low'}; let pipeOn=!!pipe;
+/* dynamic resolution: the auto-quality check in main.js scales rendering with this (1 = the quality's
+   own resolution) before it drops a whole quality level, and eases it back when there is headroom */
+let dynScale=1;
+function applyResScale(){ engine.setHardwareScalingLevel((QUAL==='low'?1.3:QUAL==='high'?1.15:1)*dynScale); fit(); }
+function setDynScale(v){ dynScale=Math.max(1,Math.min(1.3,v)); applyResScale(); }
 function setQuality(q,manual){
-  QUAL=q; const low=q==='low', hi=q==='high';
-  sun.shadowEnabled=!low;
-  // the reflection renders the whole scene a second time, so it only exists on High
-  floorMat.reflectionTexture=hi?mirror:null; mirror.renderList=hi?mirrorList:[];
+  QUAL=q; const low=q==='low', hi=q==='high'; dynScale=1;   // a quality change starts again at full sharpness for that level
+  for(let i=outlinedMeshes.length-1;i>=0;i--){ const m=outlinedMeshes[i]; if(m.isDisposed()) outlinedMeshes.splice(i,1); else m.renderOutline=!low; }
+  sun.shadowEnabled=hi;   // real shadows only on High: heroes/bosses/dummies already have blob() contact shadows, so Balanced/Low lose almost nothing
+  // the reflection renders the whole scene a second time, so it only exists on High - and even there the
+  // corridor segments are left out (their reflection in the floor is barely visible, the characters' is)
+  floorMat.reflectionTexture=hi?mirror:null; mirror.renderList=hi?mirrorList.filter(m=>SEGS.indexOf(m)<0):[];
   const ct=scene.customRenderTargets, ci=ct.indexOf(mirror);
   if(hi&&ci<0) ct.push(mirror); else if(!hi&&ci>=0) ct.splice(ci,1);
-  petals.emitRate=low?3:8; dust.emitRate=low?14:30;
+  setEmit(petals,low?2:4); setEmit(dust,low?8:14);
   // the post-process pipeline (bloom + FXAA) costs several full-screen passes, so only High uses it;
   // otherwise the scene's own colour grading is applied directly while drawing (no extra passes)
   const ic=scene.imageProcessingConfiguration;
@@ -130,6 +137,6 @@ function setQuality(q,manual){
     else if(!hi&&pipeOn){ mgr.detachCamerasFromRenderPipeline('dp',camera); pipeOn=false; }
   }catch(e){ console.warn('quality fx',e); } }
   ic.applyByPostProcess=hi&&pipeOn; ic.exposure=hi?.92:1.08; ic.contrast=hi?1.12:1.05; ic.vignetteWeight=hi?2.4:1.6;
-  engine.setHardwareScalingLevel(low?1.3:1); fit();
+  applyResScale();   // High renders at ~76% of the pixels (scaling 1.15): with bloom+reflection+shadows on top, that is what keeps it smooth
   if(manual){ try{ localStorage.setItem('sh_q2',q); }catch(e){} G.qualFixed=true; toast('Graphics: '+QNAME[q]+'  (press G to switch)'); }
 }
