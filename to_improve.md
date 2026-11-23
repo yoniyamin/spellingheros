@@ -54,7 +54,7 @@ and bringing missed words back (practice words).
 - **Unhandled rejections in the console.** Fire-and-forget tweens that throw now reject their promise, which the browser logs.
   Harmless, but `run()` or a tiny wrapper could swallow the ones that nobody awaits.
 - **Vendoring Babylon.js.** The engine is pinned to `v9.37.1` on the CDN, but still needs the internet the first time. If the
-  game should work fully offline, save that file under `spelling-ninja/lib/` and point `index.html` at it (about 9 MB, so
+  game should work fully offline, save that file under `lib/` and point `index.html` at it (about 9 MB, so
   decide whether it belongs in git).
 - **Automated checks.** The word-choice logic (`buildPool`, `makeOptions`, practice scores) is mostly pure and easy to test
   with a few asserts in a small `tests.html` page, with no build step.

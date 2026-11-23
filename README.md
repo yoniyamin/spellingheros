@@ -5,8 +5,6 @@ choosing the right letters, and beat a boss at the end of each level. Built with
 JavaScript on top of [Babylon.js](https://www.babylonjs.com/). There is no build step and no audio or
 image files; sounds, music and figures are generated in code.
 
-> The folder is still called `spelling-ninja` from an earlier version. The game is now called **Spelling Heroes**.
-
 ## How to play
 
 1. **Title screen:** click or press ✕ to start.
@@ -96,10 +94,9 @@ instead of getting stuck.
 
 ## Running it
 
-It is a static site. Serve the `spelling-ninja` folder with any web server and open it in a browser, for example:
+It is a static site. Serve this repository root with any web server and open it in a browser, for example:
 
 ```
-cd spelling-ninja
 python -m http.server 8777
 ```
 
@@ -111,7 +108,6 @@ the browser's `localStorage` under the key `spellingHeroes_v1`.
 ## Project layout
 
 ```
-spelling-ninja/
 ├── index.html        all screens (title, select, shop, locker, words, pause, report, reveal) and the script load order
 ├── css/style.css     look and feel
 ├── js/
@@ -126,6 +122,7 @@ spelling-ninja/
 │   ├── input.js      keyboard, mouse and PS4 controller handling
 │   ├── game.js       game state, screens, wardrobe, word editor, game flow (levels, words, finishers, report, chest)
 │   └── main.js       start-up and the main loop
+├── models/           Kenney hero GLBs, boss, weapons (CC0 / kit licenses in models/)
 └── Backup/           older snapshots (not part of the game; ignored by git)
 ```
 
