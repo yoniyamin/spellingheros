@@ -380,8 +380,8 @@ async function wrong(d){
   });
   await dashTo(rig,x0,300);
   if(G.wrongRow>=2){ const c=G.dummies.find(x=>x.alive&&x.letter===G.cur.w[G.idx]); if(c) c.hint=true; }
-  G.boss&&G.boss.laugh();
-  if(G.lives<=0){ await gameOver(); return; }
+  const lg=G.boss&&G.boss.laugh();
+  if(G.lives<=0){ await lg; await gameOver(); return; }       // let the laugh finish before the boss strikes back
   remindWord(); G.lock=false; startTimer();
 }
 /* the 20 seconds ran out: lose a life, hear the word again, same signs, fresh 20 seconds */
@@ -394,11 +394,39 @@ async function timeUp(){
   if(G.wrongRow>=2){ const c=G.dummies.find(x=>x.alive&&x.letter===G.cur.w[G.idx]); if(c) c.hint=true; }
   remindWord(); G.lock=false; startTimer();
 }
+/* The boss strikes back (mirror of the hero's attack): it winds up, lunges at the hero with the same kind of impact effects
+   (shake, hit-stop, shockwave, comic text), and the hero is knocked flat on the ground, seeing stars. */
+async function bossWins(){
+  const rig=G.rig, b=G.boss; if(!rig||!b) return;
+  const w=b.wob, j=rig.j, p=rig.root.position, x0=p.x; rig.busy=true; rig.moving=false; rig.cheer=false;
+  callout('😈 BOSS SMASH!','#ff6b6b'); SFX.whoosh();
+  const reach=Math.max(6,b.root.position.x-x0-3);                       // the boss root keeps following the hero, so lunge with the wob node
+  await tween(420,k=>{ w.position.x=k*1.8; w.rotation.z=-k*.25; w.scaling.set(1-k*.06,1+k*.14,1); });          // wind up: lean back, stretch
+  SFX.whoosh();
+  await tween(190,k=>{ w.position.x=1.8-(1.8+reach)*k; w.rotation.z=-.25+.55*k; w.scaling.set(.94+k*.06,1.14-k*.14,1); },E.in);   // lunge
+  // impact
+  const hit=p.add(V3(0,1.6,0));
+  SFX.bossHit(); SFX.bonk(); setTimeout(()=>SFX.boing(),120); G.shake=.9; camPunch=1; freeze(180,.06); flash('#ff4040',.5);
+  shock(hit.add(V3(0,0,-.6)),{color:'#ff6b6b',size:5,ms:420});
+  popText(rnd(['SMASH!','WHAM!','KA-BOOM!','THWACK!']),hit.add(V3(0,.4,0)),'#ff6b6b');
+  burst(hit,{count:32,power:6,size:.5,c1:[1,.4,.3],c2:[1,.85,.4]}); powFx(hit); slashFx(hit,'#ff9fd0'); ringFx(p.clone(),'#ff6b6b');
+  // the boss pulls back while the hero is thrown away from it, spinning, and lands on its back
+  const back=tween(520,k=>{ w.position.x=-reach*(1-k); w.rotation.z=.3*(1-k); w.scaling.setAll(1); });
+  await tween(720,k=>{ p.x=x0-5.5*k; p.y=Math.sin(k*PI)*3; j.body.rotation.x=-(PI*2+1.5)*k;
+    j.armR.rotation.set(-.6,0,1.4+Math.sin(k*22)*.3); j.armL.rotation.set(-.6,0,-1.4-Math.sin(k*22)*.3); j.legR.rotation.x=Math.sin(k*18)*.6; j.legL.rotation.x=-Math.sin(k*18)*.6; },E.out);
+  p.y=0; SFX.thud(); G.shake=.5; burst(V3(p.x,.2,p.z),{tex:'dot',count:20,power:3,size:.7,c1:[1,1,1],c2:[.8,.85,1],life:.8,grav:-1}); ringFx(p.clone(),'#ffffff');
+  await Promise.all([back,poseTo(rig,{body:[-1.5,0,0],pos:[0,.4,0],armR:[0,0,1.7],armL:[0,0,-1.7],legR:[0,0,.35],legL:[0,0,-.35],head:[-.2,0,0]},260)]);
+  // dizzy stars over the knocked-out hero
+  popText('K.O.!',p.add(V3(0,2,0)),'#ffe066');
+  for(let i=0;i<4;i++){ emojiBurst(p.add(V3(0,1.4,0)),[rnd(['💫','⭐'])],{count:3,size:.6,power:2.5,life:1,grav:-1}); await wait(260); }
+  await b.laugh();
+}
 /* out of lives: the boss wins this round. Show the report (so the words can be practised), then back to hero select. */
 async function gameOver(){
   G.state='busy'; G.lock=true; stopTimer();
   if(G.rec){ G.results.push(G.rec); G.rec=null; }          // the word you were on counts too...
   if(G.cur){ save.weak[G.cur.w]=Math.min(5,weakOf(G.cur.w)+1); persist(); }       // ...and it goes on the "needs practice" list
+  try{ await bossWins(); }catch(e){ console.warn('boss victory animation skipped:',e); }      // the report must always come, even if the animation fails
   SFX.skull(); await banner('Oh no!','The boss wins this time... 😈',2200);
   await showSummary(true);
   resetToSelect();
