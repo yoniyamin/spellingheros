@@ -1,5 +1,7 @@
 # Spelling Heroes
 
+**Play online:** [yoniyamin.github.io/spellingheros](https://yoniyamin.github.io/spellingheros/) (GitHub Pages; needs internet the first time for Babylon.js from the CDN).
+
 A 3D spelling game for young children that runs in the browser. Pick a hero, hear a word, spell it by
 choosing the right letters, and beat a boss at the end of each level. Built with plain HTML, CSS and
 JavaScript on top of [Babylon.js](https://www.babylonjs.com/). There is no build step and no audio or
@@ -93,6 +95,12 @@ unexpected goes wrong during play, the game retries the current word, and return
 instead of getting stuck.
 
 ## Running it
+
+### GitHub Pages
+
+The site is deployed from `main` with the [GitHub Actions workflow](.github/workflows/pages.yml). After a push, check the **Actions** tab; when the run finishes, the game is live at the link above (first deploy can take a minute or two).
+
+### Local
 
 It is a static site. Serve this repository root with any web server and open it in a browser, for example:
 
