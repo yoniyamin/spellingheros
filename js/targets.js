@@ -70,7 +70,7 @@ function bossHomework(){
   rig_papers(wob);
   const mover=nd(wob,0,0,0); wob.getChildren().forEach(c=>{ if(c!==mover) c.parent=mover; });        // the wandering about moves everything but the hit / laugh wobble
   const b=bossBase(root,wob); b.name='Grumpy Homework Monster';
-  const roam=bossRoam(b,{weights:{stride:2.6,hop:2.4,spin:1.6,charge:1.6,taunt:1.6,rest:1.4},onLand:()=>bossPuff(b)}); b.roam=roam;
+  const roam=bossRoam(b,{onLand:()=>bossPuff(b)}); b.roam=roam;
   b.idle=t=>{ roam.step(t,G.bossArrived); const S=roam.S; roamPose(S,mover,{waddle:.09,squash:.16}); if(S.name==='taunt') mover.rotation.z+=Math.sin(t*16)*.06*(1-Math.abs(S.u*2-1)); };   // taunting: the stack shivers with rage
   const hit0=b.hit, laugh0=b.laugh; b.hit=async function(...a){ roam.hold(.9); return hit0.apply(b,a); }; b.laugh=async function(...a){ roam.hold(.9); return laugh0.apply(b,a); };
   return b;
@@ -107,7 +107,7 @@ function bossEgg(){
   const mover=nd(wob,0,0,0); wob.getChildren().forEach(c=>{ if(c!==mover) c.parent=mover; });        // the wandering about moves everything but the hit / laugh wobble
   const b=bossBase(root,wob); b.name='Sleepy T-Rex Egg'; b.zs=zs;
   /* the egg's routine (see bossRoam): it waddles from side to side, bounces, spins as it hops, rams the hero, and shakes with rage */
-  const roam=bossRoam(b,{weights:{stride:3,hop:3,spin:2,charge:1.6,taunt:1.6,rest:1.2},onLand:()=>bossPuff(b)}); b.roam=roam;
+  const roam=bossRoam(b,{onLand:()=>bossPuff(b)}); b.roam=roam;
   b.idle=t=>{ roam.step(t,G.bossArrived); const S=roam.S; roamPose(S,mover,{waddle:.2,squash:.22});
     if(S.name==='taunt') mover.rotation.z+=Math.sin(t*22)*.1*Math.sin(S.u*PI); else if(S.name==='charge'&&S.u>.3&&S.u<.58) mover.rotation.z+=.16*Math.sin((S.u-.3)/.28*PI);   // shaking / leaning into the ram
     zs.forEach((z,i)=>{ z.position.x=1.7+i*.45+S.x; }); };
@@ -266,7 +266,7 @@ async function bossImp(){
     const b=bossBase(root,wob); b.name='Cheeky Green Imp'; b.grounded=true;
     /* the imp's routine (see bossRoam): scampers to and fro with a proper leg cycle, long hops, spinning leaps with the arms up, charges at the hero
        and swings its mace, and taunts with wiggling arms. Legs / arms / head are posed every frame from what the routine says (S). */
-    const roam=bossRoam(b,{weights:{stride:3,hop:3,spin:2.2,charge:1.8,taunt:1.8,rest:1.2},onLand:()=>bossPuff(b)}); b.roam=roam;
+    const roam=bossRoam(b,{onLand:()=>bossPuff(b)}); b.roam=roam;
     b.idle=t=>{
       roam.step(t,G.bossArrived); const S=roam.S, br=Math.sin(t*3.1);
       roamPose(S,mover,{squash:.17,waddle:.04});
@@ -304,7 +304,9 @@ function bossPuff(b){          // a puff of dust and a small shake where the bos
 }
 function bossRoam(b,cfg={}){
   const S={x:0,y:0,z:0,face:0,spin:0,sq:0,v:0,run:0,air:0,walk:0,name:'rest',u:0,dur:1,from:0,to:0};
-  const W=Object.assign({rest:2.4,stride:3,hop:2.2,charge:2,spin:1.2,taunt:1.4},cfg.weights||{});
+  /* A boss mostly stays where it is: it rests and makes threatening gestures ('taunt'), and now and then takes a small step, a small hop or leans in
+     at the hero with a strike ('charge', a short one). The big run at the hero is only the final hit (bossWins in game.js); 'spin' is off. */
+  const W=Object.assign({rest:2.4,taunt:3,stride:.4,hop:.4,charge:.7,spin:0},cfg.weights||{});
   let tPrev=null, hold=0, last='', phase=0, landed=false;
   const RX=[ROAM_X[0],cfg.xmax??ROAM_X[1]];                       // (a wide boss gets less room on the far side)
   const clampX=x=>Math.max(RX[0],Math.min(RX[1],x)), ease=u=>u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2, lerp=(a,b,k)=>a+(b-a)*k;
@@ -315,10 +317,10 @@ function bossRoam(b,cfg={}){
   function start(name){
     S.name=name; S.u=0; S.from=S.x; phase=0; landed=false; if(name!=='arrive') last=name;
     if(name==='rest') S.dur=1.3+Math.random()*1.7;
-    else if(name==='stride'){ let to; do to=lerp(RX[0],RX[1],Math.random()); while(Math.abs(to-S.x)<1.8); S.to=to; S.dur=Math.max(1.2,Math.abs(to-S.x)/2.2); }
-    else if(name==='hop'){ S.to=clampX(S.x+(Math.random()<.5?-1:1)*(1.3+Math.random()*1.7)); S.dur=1.1; }
+    else if(name==='stride'){ const lo=Math.max(RX[0],-1.2), hi=Math.min(RX[1],.5); let to, tries=0; do to=lerp(lo,hi,Math.random()); while(Math.abs(to-S.x)<.6&&tries++<10); S.to=to; S.dur=Math.max(1.2,Math.abs(to-S.x)/1.4); }   // a short step near its place
+    else if(name==='hop'){ const dir=S.x>.3?-1:S.x<-.8?1:(Math.random()<.5?-1:1); S.to=clampX(S.x+dir*(.4+Math.random()*.5)); S.dur=1.1; }
     else if(name==='spin'){ S.to=clampX(S.x+(Math.random()-.5)*3.4); S.dur=1.35; }
-    else if(name==='charge'){ S.to=RX[0]; S.dur=3.3; }
+    else if(name==='charge'){ S.to=clampX(S.x-.9); S.dur=2.1; }                  // leans in at the hero, strikes, steps back
     else if(name==='taunt') S.dur=1.8;
     else S.dur=99;                                    // 'arrive'
     if(cfg.onMove) cfg.onMove(name==='charge'?'run':name,S);
@@ -336,17 +338,17 @@ function bossRoam(b,cfg={}){
         S.u+=dt/S.dur; const u=Math.min(S.u,1), n=S.name;
         if(n==='stride'){ S.x=lerp(S.from,S.to,ease(u)); S.v=1; ft=(S.to<S.from?1:-1)*.95*Math.min(1,u*8,(1-u)*8); }
         else if(n==='hop'||n==='spin'){
-          const a=.14, b=.86; if(u>a&&u<b){ const k=(u-a)/(b-a); S.y=Math.sin(k*PI)*(n==='spin'?2.1:1.7); S.x=lerp(S.from,S.to,k); S.air=1; if(n==='spin') S.spin=k*PI*2; } else { S.y=0; S.spin=0; S.x=u<=a?S.from:S.to; }
+          const a=.14, b=.86; if(u>a&&u<b){ const k=(u-a)/(b-a); S.y=Math.sin(k*PI)*(n==='spin'?2.1:1.2); S.x=lerp(S.from,S.to,k); S.air=1; if(n==='spin') S.spin=k*PI*2; } else { S.y=0; S.spin=0; S.x=u<=a?S.from:S.to; }
           sq=u<=a?Math.sin(u/a*PI/2):u>=b?1-(u-b)/(1-b):0;
           if(u>=b&&!landed){ landed=true; if(cfg.onLand) cfg.onLand(S); }
           ft=n==='hop'?(S.to<S.from?.5:-.5):0;
         }
         else if(n==='charge'){
-          if(u<.3){ const k=ease(u/.3); S.x=lerp(S.from,S.to,k); S.z=-1.1*k; S.v=1; S.run=1; ft=1.05; }                           // run in at the hero
+          if(u<.3){ const k=ease(u/.3); S.x=lerp(S.from,S.to,k); S.z=-.45*k; S.v=1; S.run=1; ft=.6; }                              // step in at the hero
           else if(u<.58){ if(phase<1){ phase=1; if(cfg.onMove) cfg.onMove('strike',S); SFX.whoosh(); }
-            const k=(u-.3)/.28; S.x=S.to-.5*Math.sin(Math.min(1,k*1.6)*PI); S.z=-1.1; ft=.7; sq=k>.35&&k<.6?Math.sin((k-.35)/.25*PI)*.9:0;
+            const k=(u-.3)/.28; S.x=S.to-.3*Math.sin(Math.min(1,k*1.6)*PI); S.z=-.45; ft=.5; sq=k>.35&&k<.6?Math.sin((k-.35)/.25*PI)*.9:0;
             if(k>.38&&phase<2){ phase=2; bossPuff(b); } }
-          else { if(phase<3){ phase=3; if(cfg.onMove) cfg.onMove('back',S); } const k=ease((u-.58)/.42); S.x=lerp(S.to,S.from,k); S.z=-1.1*(1-k); S.v=1; ft=-.9; }   // back to its place
+          else { if(phase<3){ phase=3; if(cfg.onMove) cfg.onMove('back',S); } const k=ease((u-.58)/.42); S.x=lerp(S.to,S.from,k); S.z=-.45*(1-k); S.v=1; ft=-.5; }   // back to its place
         }
         else if(n==='taunt'){ ft=Math.sin(u*PI*2)*.35; }
         if(S.u>=1){ S.y=0; S.spin=0; S.z=0; S.x=(n==='charge')?S.from:(S.x); start(pick()); }
@@ -374,7 +376,7 @@ async function bossModel(spec){
   let root=null;
   try{
     const res=await glbImport(spec.file);
-    root=nd(null,0,0,0); const wob=nd(root,0,0,0), mover=nd(wob,0,0,0), holder=nd(mover,0,0,0);
+    root=nd(null,0,0,0); const flat=nd(root,0,0,0), wob=nd(flat,0,0,0), mover=nd(wob,0,0,0), holder=nd(mover,0,0,0);
     const fix=nd(holder,0,0,0);                                                   // fix: moves the model's middle onto the holder's pivot, so that it turns on the spot
     holder.rotation.y=PI; res.meshes[0].parent=fix;                               // (the models arrive facing away from the camera, like the pig)
     const meshes=res.meshes.filter(m=>m.getTotalVertices&&m.getTotalVertices()>0);
@@ -384,10 +386,10 @@ async function bossModel(spec){
       x0=Math.min(x0,bb.minimumWorld.x); x1=Math.max(x1,bb.maximumWorld.x); z0=Math.min(z0,bb.minimumWorld.z); z1=Math.max(z1,bb.maximumWorld.z); });
     fix.position.set((x0+x1)/2,0,(z0+z1)/2);                                       // (measured with the holder turned half a circle, so the centre is the mirror image)
     holder.rotation.y=spec.face??PI;
-    /* Stay behind the letter signs (they stand at z=0, the boss at z=1.8): the model is pushed back by its own radius, so its front edge never reaches the
-       signs, even while it spins or hops, and it is scaled up by the same perspective factor so it does not look smaller. */
-    const k0=spec.height/Math.max(.1,hi-lo), radius=Math.hypot(x1-x0,z1-z0)/2*k0, zoff=Math.max(0,radius-1.45)+.9, k=k0*(14+zoff)/14;
-    holder.scaling.setAll(k); holder.position.y=-lo*k-.02;
+    /* Stay behind the letter signs (they stand at z=0, the boss at z=1.8) without moving back behind the scenery (z 2.5 and up): a big model is
+       flattened a little along the depth (flat.scaling.z), so its front edge stays clear of the signs. From the camera in front this is hardly visible. */
+    const k=spec.height/Math.max(.1,hi-lo), radius=Math.max(x1-x0,z1-z0)/2*k*1.1, zs=Math.max(.4,Math.min(1,1.35/radius,spec.zs||1));          // (spec.zs: for a model whose swinging weapon reaches far forward)
+    flat.scaling.z=zs; holder.scaling.setAll(k); holder.position.y=-lo*k-.02;
     /* The colour map of these models is a tiny palette (every triangle points at one square of colour). Drawn as it is (smoothed, with mipmaps) it came out
        muddy and dark, so it is copied into a plain texture without smoothing, and lightened (spec.light) because the palette colours are on the dull side. */
     const olds=[], mats=[]; meshes.forEach(m=>{ if(m.material) olds.push(m.material); });
@@ -411,11 +413,11 @@ async function bossModel(spec){
       if(cur===g&&loop&&g.isStarted) return g; if(cur&&cur!==g) cur.stop(); else if(cur===g) g.stop(); cur=g; g.start(loop,speed); return g; };
     const b=bossBase(root,wob); b.name=spec.name; b.grounded=true;
     const roam=bossRoam(b,{weights:spec.weights,xmax:spec.xmax,
-      onMove:(n)=>{ if(n==='taunt') play(rnd(['wave','yes','no']),true); else if(n==='hop'||n==='spin') play('jump',false,1.15); else if(n==='strike') play('punch',false,1.2);
-        else if(n==='run'||n==='arrive') play('run'); else if(n==='stride'||n==='back') play('walk'); else play('idle'); },
+      onMove:(n)=>{ if(n==='taunt') play(rnd(['punch','punch','no']),true); else if(n==='hop'||n==='spin') play('jump',false,1.15); else if(n==='strike') play('punch',false,1.2);   // threatening: swings, head shakes
+        else if(n==='arrive') play('run'); else if(n==='run'||n==='stride'||n==='back') play('walk'); else play('idle'); },
       onLand:()=>bossPuff(b)});
     b.roam=roam;
-    b.idle=t=>{ roam.step(t,G.bossArrived); const S=roam.S, sh=spec.shift||0; mover.position.set(S.x+sh,S.y,zoff+S.z*.15); b.off=S.x+sh; mover.rotation.y=S.face*BOSS_FACE_SIGN+S.spin; cs.scaling.set(spec.height*.3*(1-Math.min(S.y,2)*.18),spec.height*.2*(1-Math.min(S.y,2)*.18),1); };
+    b.idle=t=>{ roam.step(t,G.bossArrived); const S=roam.S, sh=spec.shift||0; mover.position.set(S.x+sh,S.y,S.z*.3); b.off=S.x+sh; mover.rotation.y=S.face*BOSS_FACE_SIGN+S.spin; cs.scaling.set(spec.height*.3*(1-Math.min(S.y,2)*.18),spec.height*.2*(1-Math.min(S.y,2)*.18)/zs,1); };
     const hit0=b.hit, laugh0=b.laugh;
     b.hit=async function(...a){ roam.hold(1); play('hit',false,1.1); return hit0.apply(b,a); };
     b.laugh=async function(...a){ roam.hold(1); play(rnd(['yes','wave']),false); return laugh0.apply(b,a); };
@@ -431,12 +433,12 @@ async function bossModel(spec){
 }
 const BIGSPEC=(file,name,height,extra)=>Object.assign({file:'Monsters/'+file+'.glb',name,height,clips:BIG_CLIPS,shift:-.9},extra);
 const bossYeti=()=>bossModel(BIGSPEC('Yeti','Grumpy Yeti',5.8,{light:1.4,shift:-.7}));
-const bossBarbarossa=()=>bossModel({file:'Pirates/Captain_Barbarossa.glb',name:'Captain Barbarossa',height:5.2,light:1.15,shift:-1,clips:Object.assign({},BIG_CLIPS,{punch:['Sword','Punch']})});
-const bossPinkBlob=()=>bossModel({file:'Monsters/PinkBlob.glb',name:'Bouncy Pink Blob',height:4.4,light:1.7,shift:-1.5,weights:{charge:1.4,hop:3.4,spin:2},
+const bossBarbarossa=()=>bossModel({file:'Pirates/Captain_Barbarossa.glb',name:'Captain Barbarossa',height:5.2,light:1.15,shift:-1,zs:.6,clips:Object.assign({},BIG_CLIPS,{punch:['Sword','Punch']})});
+const bossPinkBlob=()=>bossModel({file:'Monsters/PinkBlob.glb',name:'Bouncy Pink Blob',height:4.4,light:1.7,shift:-1.5,weights:{hop:.9},
   clips:{idle:'Idle',walk:'Walk',run:'Walk',jump:'Jump',punch:'Bite_Front',wave:['Dance','Yes'],yes:'Yes',no:'No',hit:'HitRecieve',death:'Death'}});
 const bossAlien=()=>bossModel(BIGSPEC('Alien','Wobbly Alien',5.2,{light:1.6}));
 const bossDino=()=>bossModel(BIGSPEC('Dino','Dizzy Dino',5));
 const bossOrc=()=>bossModel(BIGSPEC('Orc','Grumpy Orc',5.4));
-const bossFrog=()=>bossModel(BIGSPEC('Frog','Hoppy Frog',4.6,{weights:{hop:4,spin:2}}));
+const bossFrog=()=>bossModel(BIGSPEC('Frog','Hoppy Frog',4.6,{weights:{hop:1.1}}));
 const BOSSES=[bossHomework,bossPig,bossEgg,bossImp,bossYeti,bossPinkBlob,bossBarbarossa,bossAlien,bossDino,bossOrc,bossFrog];
 const EXTRA_BOSSES=[bossImp,bossEgg,bossAlien,bossDino,bossOrc,bossFrog];      // what turns up when the tour comes round to a place again (see bossForLevel in places.js)

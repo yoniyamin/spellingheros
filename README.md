@@ -69,8 +69,10 @@ Every place has its own boss the first time you get there in a run (the school h
 back to a place, a random boss from the other pool turns up instead (Cheeky Green Imp, the egg, Wobbly Alien, Dizzy Dino,
 Grumpy Orc or Hoppy Frog), never the same one twice in a row.
 
-The bosses do not just hop: a small "director" (`bossRoam` in `js/targets.js`) strings together strolls, hops, spins, charges at
-the hero with a strike, and taunts, and plays the matching animation of the model (walk, run, jump, punch, wave...).
+The bosses mostly hold their ground: a small "director" (`bossRoam` in `js/targets.js`) has them rest and make threatening gestures
+(a punch swing, a head shake, a shiver of rage), with now and then a small step, a small hop or a lean-in with a strike, and plays the
+matching animation of the model. The big run at the hero is the final hit when you lose the round. Model bosses are flattened a little
+in depth so they stay behind the letter signs without going behind the scenery.
 
 ### Rewards
 
@@ -172,6 +174,8 @@ matters**: `settings` → `audio` → `engine` → `tween` → `fx` → `corrido
   the place is used (or a little ahead of time during the tour). Add it to `TOUR` and give it a `tour:()=>boss` to put it
   in the adventure tour. Keep the scenery light: ~16 copies are on screen at once, so `places.js` scales down sphere,
   cylinder and torus detail (`LOD_S`, `LOD_C`, `LOD_T`). Nodes that must survive `sweepScene()` in `js/game.js` are registered with `keepNode`.
+- **Draw order:** the backdrop (floor, sky, scenery pieces, ambient sparkles) is in rendering group 0; everything else (hero, signs, bosses, effects) is in
+  group 1 and is drawn on top. A new floor / sky / scenery mesh or ambient particle system must be wrapped in `backdrop(...)` (see `js/engine.js`), or it will be drawn over the characters.
 - **Default words and packs:** `DEFAULT_WORDS` and `WORD_PACKS` in `js/settings.js`; automatic picture guesses are in `EMOJI_DICT`; picker pictures are in `EMOJI_CATS`.
 - **Wrong-letter behaviour:** `CONFUSABLE` in `js/settings.js`.
 - **Challenge numbers:** `LIVES_PER_BOSS`, `LETTER_TIME` and `BLANK_SHARE` in `js/settings.js`.

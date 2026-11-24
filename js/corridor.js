@@ -80,11 +80,11 @@ function buildSegment(type){
   add(bx(4.02,.03,.03,dark,null,0,5.78,3.3));
   for(let k=0;k<5;k++){ const f=bx(.36,.36,.03,M(RAINBOW[(k+type*2)%RAINBOW.length][0],.5),null,-1.6+k*.8,5.55,3.29); f.rotation.z=PI/4; add(f); }
   const merged=BABYLON.Mesh.MergeMeshes(parts,true,true,undefined,false,true);
-  merged.isVisible=false; merged.isPickable=false; return merged;
+  merged.isVisible=false; merged.isPickable=false; return backdrop(merged);
 }
 const SEGS=[]; const SEGN=20;
 const SCHOOL_PROTOS=[0,1,2,3].map(buildSegment);       // places.js builds the walls of the other places the same way and swaps them in
-for(let i=0;i<SEGN;i++){ const s=SCHOOL_PROTOS[i%4].createInstance('seg'+i); s.position.x=i*4-24; s.isPickable=false; SEGS.push(s); }
+for(let i=0;i<SEGN;i++){ const s=backdrop(SCHOOL_PROTOS[i%4].createInstance('seg'+i)); s.position.x=i*4-24; s.isPickable=false; SEGS.push(s); }
 REG=true; SEGS.forEach(s=>mirrorList.push(s));
 
 /* glossy tiled floor that follows the camera */
@@ -100,11 +100,11 @@ const floorMat=new BABYLON.StandardMaterial('floorM',scene);
 floorMat.diffuseTexture=floorTex; floorTex.uScale=30; floorTex.vScale=5.5; floorMat.specularColor=new BABYLON.Color3(.12,.12,.2); floorMat.specularPower=80;
 floorMat.diffuseColor=new BABYLON.Color3(.78,.8,.95); floorMat.emissiveColor=BABYLON.Color3.FromHexString('#7f86cc').scale(.12); floorMat.reflectionTexture=mirror;
 mirror.level=.2;
-const floor=BABYLON.MeshBuilder.CreateGround('floor',{width:120,height:22},scene);
+const floor=backdrop(BABYLON.MeshBuilder.CreateGround('floor',{width:120,height:22},scene));
 floor.position.set(14,0,-5); floor.material=floorMat; floor.receiveShadows=true; floor.isPickable=false;
 
 /* dust motes */
-const dust=new BABYLON.ParticleSystem('dust',130,scene);
+const dust=backdrop(new BABYLON.ParticleSystem('dust',130,scene));
 dust.particleTexture=TEX.dot; dust.emitter=V3(0,2,0); dust.minEmitBox=V3(-12,-1,-3); dust.maxEmitBox=V3(12,5,10);
 dust.direction1=V3(-.1,.05,0); dust.direction2=V3(.1,.3,0); dust.minEmitPower=.1; dust.maxEmitPower=.4;
 dust.minSize=.05; dust.maxSize=.16; dust.minLifeTime=6; dust.maxLifeTime=11; dust.emitRate=14;

@@ -355,7 +355,7 @@ let PLACE=PLACES[0];
 const protoCache={};
 function buildProto(p,t){
   const parts=[], k=kit(m=>{ parts.push(m); return m; }); p.seg(t,k);
-  const merged=BABYLON.Mesh.MergeMeshes(parts,true,true,undefined,false,true); merged.isVisible=false; merged.isPickable=false; return keepNode(merged);
+  const merged=BABYLON.Mesh.MergeMeshes(parts,true,true,undefined,false,true); merged.isVisible=false; merged.isPickable=false; return keepNode(backdrop(merged));
 }
 function placeProtos(p){                     // anything not prepared yet is built right now
   if(p.protos) return p.protos();
@@ -378,7 +378,7 @@ const tourPlace=level=>PLACES.find(p=>p.id===TOUR[(level-1)%TOUR.length]);
 /* the place a level takes place in, or null when it is picked at random */
 function placeForLevel(level){ if(save.place==='random') return null; if(save.place==='tour') return tourPlace(level); return PLACES.find(p=>p.id===save.place)||PLACES[0]; }
 /* the painted sky: one plane behind everything; it follows the camera a little slower than the scenery, so the moon / sun drifts */
-const skyPlane=keepNode(BABYLON.MeshBuilder.CreatePlane('placeSky',{width:150,height:50},scene));
+const skyPlane=keepNode(backdrop(BABYLON.MeshBuilder.CreatePlane('placeSky',{width:150,height:50},scene)));
 skyPlane.position.set(0,14,30); skyPlane.isPickable=false; skyPlane.alwaysSelectAsActiveMesh=true; skyPlane.setEnabled(false);
 function placeFollow(camX){ skyPlane.position.x=camX*.96; }
 function skyMatOf(p){
@@ -399,7 +399,7 @@ function setPlace(id){
   // the repeating wall / scenery pieces: new instances at the same spots, so a swap in the middle of a run is seamless
   const protos=placeProtos(p), xs=SEGS.map(s=>s.position.x);
   SEGS.forEach(s=>{ const i=mirrorList.indexOf(s); if(i>=0) mirrorList.splice(i,1); s.dispose(); }); SEGS.length=0;
-  xs.forEach((x,i)=>{ const s=keepNode(protos[i%4].createInstance('seg'+i)); s.position.x=x; s.isPickable=false; SEGS.push(s); });
+  xs.forEach((x,i)=>{ const s=keepNode(backdrop(protos[i%4].createInstance('seg'+i))); s.position.x=x; s.isPickable=false; SEGS.push(s); });
   petalRate=p.petals.rate; dustRate=p.dust.rate; applyPS(petals,p.petals); applyPS(dust,p.dust);
   setEmit(petals,QUAL==='low'?Math.ceil(petalRate/2):petalRate); setEmit(dust,QUAL==='low'?Math.ceil(dustRate/2):dustRate);
 }

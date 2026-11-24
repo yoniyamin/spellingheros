@@ -9,6 +9,14 @@ const canvas = $('c');
 const engine = new BABYLON.Engine(canvas,true,{stencil:true,preserveDrawingBuffer:false});
 engine.setHardwareScalingLevel(1);   // never render above CSS resolution: hi-DPI screens would cost 4x the pixels
 const scene = new BABYLON.Scene(engine);
+/* Draw order. Group 0 is the backdrop: the floor, the sky, the scenery pieces and the ambient sparkles (fireflies, snow, dust). Everything else (the hero,
+   the letter signs, the boss, effects) is in group 1, which is drawn afterwards over a cleared depth buffer. So the backdrop can never cut through,
+   or float over, a character or a sign, however the boss and the scenery slide past each other. New meshes and particle systems start in group 1;
+   backdrop(x) moves one into group 0. (the backdrop all lies behind the hero, so nothing is drawn in the wrong order) */
+const BACKDROP=new WeakSet();     // (Babylon announces a new mesh only after its constructor ran, so the backdrop marks itself and the announcement skips it)
+scene.onNewMeshAddedObservable.add(m=>{ if(!BACKDROP.has(m)) m.renderingGroupId=1; });
+scene.onBeforeRenderObservable.add(()=>{ const a=scene.particleSystems; for(let i=0;i<a.length;i++){ const p=a[i]; if(p._rg===undefined){ p._rg=1; if(!BACKDROP.has(p)) p.renderingGroupId=1; } } });
+const backdrop=o=>{ BACKDROP.add(o); o.renderingGroupId=0; return o; };
 scene.skipPointerMovePicking=true;   // we never pick meshes under the mouse (clicks are tested in screen space), so skip that work
 const FOG = BABYLON.Color3.FromHexString('#aab0ea');
 scene.clearColor = new BABYLON.Color4(FOG.r,FOG.g,FOG.b,1);
@@ -171,7 +179,7 @@ streak.minScaleX=3; streak.maxScaleX=6; streak.minScaleY=.06; streak.maxScaleY=.
 streak.color1=new BABYLON.Color4(.3,.34,.85,.65); streak.color2=new BABYLON.Color4(1,1,1,.8); streak.colorDead=new BABYLON.Color4(.3,.34,.85,0);
 streak.start();
 /* slow falling petals / light flakes for dreaminess */
-const petals=new BABYLON.ParticleSystem('petals',160,scene);     // room for the busiest place (snowfall, see places.js)
+const petals=backdrop(new BABYLON.ParticleSystem('petals',160,scene));     // room for the busiest place (snowfall, see places.js)
 petals.particleTexture=TEX.petal; petals.emitter=V3(0,0,0); petals.minEmitBox=V3(-13,4,-4); petals.maxEmitBox=V3(13,6.5,6);
 petals.direction1=V3(-.5,-.5,0); petals.direction2=V3(.2,-.15,0); petals.minEmitPower=.3; petals.maxEmitPower=.8; petals.gravity=V3(0,-.12,0);
 petals.minSize=.22; petals.maxSize=.5; petals.minLifeTime=8; petals.maxLifeTime=13; petals.emitRate=8; petals.minAngularSpeed=-1.5; petals.maxAngularSpeed=1.5;
