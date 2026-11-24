@@ -31,7 +31,7 @@ function cardMat(letter,btn){
 }
 function makeDummy(letter,btn){
   const root=nd(null,0,0,0), wood=M('#a9a0d8'), dark=M('#6c72c4'), light=M('#e8eaff'), ink=M('#1c1d3a',0);
-  cy(.8,1,.14,dark,root,0,.07,0); cy(.3,.34,1.05,wood,root,0,.64,0); bx(1.3,.2,.2,wood,root,0,1.05,0);
+  cy(.8,1,.14,dark,root,0,.07,0); cy(.3,.34,1.05,wood,root,0,.64,0); const arms=bx(1.3,.2,.2,wood,root,0,1.05,0);
   const head=sp(.64,light,root,0,1.55,0); [-1,1].forEach(s=>sp(.09,ink,root,s*.12,1.6,-.28));
   bx(.22,.04,.04,ink,root,0,1.42,-.3);
   tor(.42,.1,M(BTN[btn].color,.7),root,0,.55,0);
@@ -39,7 +39,7 @@ function makeDummy(letter,btn){
   const glow=BABYLON.MeshBuilder.CreateDisc('glow',{radius:1,tessellation:28},scene); glow.rotation.x=PI/2; glow.position.y=.035;
   glow.parent=root; glow.material=GM(BTN[btn].color,.28); glow.isPickable=false;
   blob(root,.7); outlineNode(root,.022,card);
-  return {root,card,letter,btn,alive:true,hint:false,t:Math.random()*5};
+  return {root,card,letter,btn,arms,alive:true,hint:false,t:Math.random()*5};
 }
 function disposeDummy(d){ try{ d.card.material.dispose(true,true); }catch(e){} d.root.dispose(); }
 
@@ -68,7 +68,12 @@ function bossHomework(){
   bx(1.3,.34,.1,dark,wob,0,2.5,-.97); for(let i=0;i<4;i++) bx(.2,.2,.06,white,wob,-.45+i*.3,2.62,-1.02);
   [-1,1].forEach(s=>{ const a=nd(wob,s*1.9,1.8,0); a.rotation.z=s*.9; cy(.16,.16,2.5,M('#c3c7f6'),a); cy(0,.16,.35,M('#3a3f8f'),a,0,1.4,0); });
   rig_papers(wob);
-  const b=bossBase(root,wob); b.name='Grumpy Homework Monster'; return b;
+  const mover=nd(wob,0,0,0); wob.getChildren().forEach(c=>{ if(c!==mover) c.parent=mover; });        // the wandering about moves everything but the hit / laugh wobble
+  const b=bossBase(root,wob); b.name='Grumpy Homework Monster';
+  const roam=bossRoam(b,{weights:{stride:2.6,hop:2.4,spin:1.6,charge:1.6,taunt:1.6,rest:1.4},onLand:()=>bossPuff(b)}); b.roam=roam;
+  b.idle=t=>{ roam.step(t,G.bossArrived); const S=roam.S; roamPose(S,mover,{waddle:.09,squash:.16}); if(S.name==='taunt') mover.rotation.z+=Math.sin(t*16)*.06*(1-Math.abs(S.u*2-1)); };   // taunting: the stack shivers with rage
+  const hit0=b.hit, laugh0=b.laugh; b.hit=async function(...a){ roam.hold(.9); return hit0.apply(b,a); }; b.laugh=async function(...a){ roam.hold(.9); return laugh0.apply(b,a); };
+  return b;
 }
 function rig_papers(wob){ const m=M('#ffffff',.8); for(let i=0;i<3;i++){ const p=pl(.8,1,m,wob,-2.2+i*2.2,4.2+i%2*.6,-.5); p.rotation.z=.4*i; } }
 function bossBunny(){
@@ -99,12 +104,19 @@ function bossEgg(){
   const cracks=[]; [[-.6,3.6],[.5,3.5],[-.1,3.1],[.9,2.7],[-.9,2.5]].forEach((st,n)=>{ const path=[]; let x=st[0],y=st[1];
     for(let i=0;i<7;i++){ path.push(V3(x,y,surf(x,y)-.03)); x+=(i%2?.18:-.18)*(n%2?1:-1); y-=.25; }
     const t=BABYLON.MeshBuilder.CreateTube('crack',{path,radius:.045,tessellation:5},scene); t.material=M('#3a3f8f',0); t.parent=wob; t.isPickable=false; t.setEnabled(false); cracks.push(t); });
+  const mover=nd(wob,0,0,0); wob.getChildren().forEach(c=>{ if(c!==mover) c.parent=mover; });        // the wandering about moves everything but the hit / laugh wobble
   const b=bossBase(root,wob); b.name='Sleepy T-Rex Egg'; b.zs=zs;
-  const baseHit=b.hit; b.hit=async function(n){ for(let i=0;i<Math.min(n,cracks.length);i++) cracks[i].setEnabled(true); await baseHit(); };
+  /* the egg's routine (see bossRoam): it waddles from side to side, bounces, spins as it hops, rams the hero, and shakes with rage */
+  const roam=bossRoam(b,{weights:{stride:3,hop:3,spin:2,charge:1.6,taunt:1.6,rest:1.2},onLand:()=>bossPuff(b)}); b.roam=roam;
+  b.idle=t=>{ roam.step(t,G.bossArrived); const S=roam.S; roamPose(S,mover,{waddle:.2,squash:.22});
+    if(S.name==='taunt') mover.rotation.z+=Math.sin(t*22)*.1*Math.sin(S.u*PI); else if(S.name==='charge'&&S.u>.3&&S.u<.58) mover.rotation.z+=.16*Math.sin((S.u-.3)/.28*PI);   // shaking / leaning into the ram
+    zs.forEach((z,i)=>{ z.position.x=1.7+i*.45+S.x; }); };
+  const baseHit=b.hit; b.hit=async function(n){ roam.hold(.9); for(let i=0;i<Math.min(n,cracks.length);i++) cracks[i].setEnabled(true); await baseHit(); };
+  const laugh0=b.laugh; b.laugh=async function(...a){ roam.hold(.9); return laugh0.apply(b,a); };
   b.defeat=async function(){
-    SFX.bossHit(); await tween(700,k=>{ wob.rotation.z=Math.sin(k*PI*14)*.22*k; wob.scaling.y=1+k*.12; });
-    const p=root.position; burst(V3(p.x,p.y+2,p.z-1),{count:70,power:9,size:.9,c1:[1,1,1],c2:[.7,.8,1]}); SFX.pop(); wob.setEnabled(false); zs.forEach(z=>z.setEnabled(false));
-    const baby=nd(root,0,0,-.6), mint=M('#9be8c0',.5), mint2=M('#7bd4a4',.5);
+    roam.hold(99); SFX.bossHit(); await tween(700,k=>{ wob.rotation.z=Math.sin(k*PI*14)*.22*k; wob.scaling.y=1+k*.12; });
+    const p=root.position; burst(V3(p.x+(b.off||0),p.y+2,p.z-1),{count:70,power:9,size:.9,c1:[1,1,1],c2:[.7,.8,1]}); SFX.pop(); wob.setEnabled(false); zs.forEach(z=>z.setEnabled(false));
+    const baby=nd(root,b.off||0,0,-.6), mint=M('#9be8c0',.5), mint2=M('#7bd4a4',.5);
     sp(1.5,mint,baby,0,.95,0,1,1.1,1.2); sp(1.2,mint,baby,0,1.9,-.55); [-1,1].forEach(s=>{ sp(.42,M('#fff',.7),baby,s*.35,2.05,-1.05); sp(.2,M('#1c1d3a',0),baby,s*.35,2.03,-1.22); });
     const tail=cy(0,.8,1.5,mint2,baby,0,.9,.95); tail.rotation.x=-1.2; [-1,1].forEach(s=>{ const a=sp(.28,mint2,baby,s*.65,1.2,-.65,.7,1,.7); a.rotation.z=s*.4; });
     for(let i=0;i<4;i++) cy(0,.26,.34,mint2,baby,0,1.85-i*.28,.35+i*.32);
@@ -224,4 +236,207 @@ async function bossPig(){
     return b;
   }catch(e){ console.warn('pig model not used, using the dust bunny:',e); if(root) root.dispose(); return bossBunny(); }
 }
-const BOSSES=[bossHomework,bossPig,bossEgg];
+/* Cheeky Green Imp: the "Imp" from the same Quaternius kit (models/Imp.glb, with the unused normal / ORM maps cut out so it is 1 MB instead of 9 MB;
+   its green colour variant is models/Textures/Imp-green.png, downsized to 1024). It has the Puglin's skeleton and no animation clips either, so the
+   idle is done by hand: it keeps hopping about (crouch, jump with the arms up, a squashy landing with a puff of dust), taps the mace and looks around.
+   It is the first boss of the Haunted Forest. If it fails to load, the Giant Dust Bunny takes its place (same as the pig). */
+const IMP_SCALE=3.1, IMP_FACE=PI;     // turned about y so the imp looks at the camera (like the pig, the model arrives facing away)
+const IMP_ARMS=-1.15;                 // the model is in a T-pose: swing both upper arms down by this much (radians, about the bone's z axis)
+const IMP_HOP=2.6;                    // seconds between hops
+async function bossImp(){
+  let root=null;
+  try{
+    const res=await glbImport('Imp.glb');
+    root=nd(null,0,0,0); const wob=nd(root,0,0,0), mover=nd(wob,0,0,0), holder=nd(mover,0,0,0);     // mover: the wandering about (bossRoam); holder: the model itself
+    holder.scaling.setAll(IMP_SCALE); holder.rotation.y=IMP_FACE; res.meshes[0].parent=holder;
+    res.animationGroups.forEach(a=>a.stop());
+    const bone=n=>res.transformNodes.find(t=>t.name===n), AX=BABYLON.Axis, RA=BABYLON.Quaternion.RotationAxis;
+    [['upperarm_l',1],['upperarm_r',-1]].forEach(([n,s])=>{ const k=bone(n); if(k&&k.rotationQuaternion) k.rotationQuaternion=k.rotationQuaternion.multiply(RA(AX.Z,IMP_ARMS*s)); });
+    const rest={}; ['spine_01','spine_02','spine_03','neck_01','Head','upperarm_l','upperarm_r','lowerarm_l','lowerarm_r','thigh_l','thigh_r','calf_l','calf_r','foot_l','foot_r']
+      .forEach(n=>{ const k=bone(n); if(k&&k.rotationQuaternion) rest[n]={k,q:k.rotationQuaternion.clone()}; });
+    const pose=(n,x=0,y=0,z=0)=>{ const r=rest[n]; if(!r) return; let q=r.q; if(x) q=q.multiply(RA(AX.X,x)); if(y) q=q.multiply(RA(AX.Y,y)); if(z) q=q.multiply(RA(AX.Z,z)); r.k.rotationQuaternion=q; };
+    let tex=null; await new Promise((ok,fail)=>{ const to=setTimeout(()=>fail(new Error('imp texture timed out')),20000);
+      tex=new BABYLON.Texture(GLB_DIR+'Textures/Imp-green.png',scene,true,false,BABYLON.Texture.TRILINEAR_SAMPLINGMODE,()=>{ clearTimeout(to); ok(); },(m,e)=>{ clearTimeout(to); fail(e||new Error(m||'imp texture failed')); }); });
+    const old=[], mats=[]; res.meshes.forEach(m=>{ if(m.getTotalVertices&&m.getTotalVertices()>0){ if(m.material) old.push(m.material); glbToon(m,.003,tex); mats.push(m.material); } });
+    old.forEach(m=>{ try{ m.dispose(true,true); }catch(e){} });
+    const BASE_Y=-.02; holder.position.y=BASE_Y;
+    const cm=new BABYLON.StandardMaterial('impShadow',scene); cm.disableLighting=true; cm.diffuseColor=BABYLON.Color3.Black(); cm.emissiveColor=BABYLON.Color3.FromHexString('#1a1c5c'); cm.alpha=.42;
+    const cs=BABYLON.MeshBuilder.CreateDisc('impContact',{radius:1,tessellation:32},scene); cs.rotation.x=PI/2; cs.scaling.set(1.2,.85,1); cs.position.set(0,.045,.1);
+    cs.parent=mover; cs.material=cm; cs.isPickable=false;
+    const b=bossBase(root,wob); b.name='Cheeky Green Imp'; b.grounded=true;
+    /* the imp's routine (see bossRoam): scampers to and fro with a proper leg cycle, long hops, spinning leaps with the arms up, charges at the hero
+       and swings its mace, and taunts with wiggling arms. Legs / arms / head are posed every frame from what the routine says (S). */
+    const roam=bossRoam(b,{weights:{stride:3,hop:3,spin:2.2,charge:1.8,taunt:1.8,rest:1.2},onLand:()=>bossPuff(b)}); b.roam=roam;
+    b.idle=t=>{
+      roam.step(t,G.bossArrived); const S=roam.S, br=Math.sin(t*3.1);
+      roamPose(S,mover,{squash:.17,waddle:.04});
+      holder.scaling.set(IMP_SCALE*(1-br*.008),IMP_SCALE*(1+br*.016),IMP_SCALE*(1-br*.008)); holder.position.y=BASE_Y;
+      const sh=1-Math.min(S.y,2)*.2; cs.scaling.set(1.2*sh,.85*sh,1);
+      const w1=Math.sin(S.walk), w2=Math.sin(S.walk+PI), mv=S.v, c=Math.max(S.sq*.9,S.air*.6);            // c: how far the knees are bent
+      pose('thigh_l',-.7*c-.8*w1*mv); pose('calf_l',1.0*c+1.1*Math.max(0,w1)*mv); pose('foot_l',-.3*c);
+      pose('thigh_r',-.7*c-.8*w2*mv); pose('calf_r',1.0*c+1.1*Math.max(0,w2)*mv); pose('foot_r',-.3*c);
+      pose('spine_01',.1*S.sq+mv*.08); pose('spine_02',.08*S.sq,Math.sin(t*.9)*.08+w1*mv*.12); pose('spine_03',0,0,Math.sin(t*1.3)*.04);
+      pose('Head',Math.sin(t*1.7)*.05+S.sq*.12,Math.sin(t*.8+1)*.32*(1-mv),Math.sin(t*1.1)*.06);
+      // arms: up in the air and when taunting (wiggling), swinging while it walks, the mace hand strikes during a charge
+      const taunt=S.name==='taunt'?.55+.45*Math.sin(t*13):0, up=Math.max(S.air,taunt);
+      const strike=S.name==='charge'&&S.u>.3&&S.u<.58?Math.sin((S.u-.3)/.28*PI):0;
+      pose('upperarm_l',w1*mv*.5,0,up*.95+Math.sin(t*2.1)*.06*(1-mv)); pose('upperarm_r',w2*mv*.5-strike*1.7,0,-up*.95-Math.sin(t*2.1+.8)*.05*(1-mv));
+      pose('lowerarm_r',strike*.9); pose('lowerarm_l',Math.sin(t*2.1)*.08);
+    };
+    const hit0=b.hit, laugh0=b.laugh; b.hit=async function(...a){ roam.hold(.9); return hit0.apply(b,a); }; b.laugh=async function(...a){ roam.hold(.9); return laugh0.apply(b,a); };
+    const base=b.dispose; b.dispose=function(){ base(); mats.forEach(m=>{ try{ m.dispose(false,false); }catch(e){} }); try{ cm.dispose(); }catch(e){} try{ tex.dispose(); }catch(e){} };
+    return b;
+  }catch(e){ console.warn('imp model not used, using the dust bunny:',e); if(root) root.dispose(); return bossBunny(); }
+}
+function impLand(b){ bossPuff(b); }
+
+/* =====================================================================
+   BOSS ROUTINES. Every boss follows the hero (main.js) and, on top of that, wanders about by itself: it strides to and fro, hops,
+   spins, charges at the hero and strikes, then walks back, and taunts now and then. bossRoam() is the "director": it picks the next
+   move (never the same twice in a row), runs the clock for it and publishes the result in S (x / y / z offset, facing, squash, walk phase ...).
+   What a move looks like is up to the boss: a model with animation clips plays the matching clip (see bossModel), the hand-built bosses
+   pose their own bones or tilt their body (see roamPose and the imp). b.off is the sideways offset, so attacks can aim at the boss.
+   ===================================================================== */
+const ROAM_X=[-3.6,1.2];       // how far a boss may wander from its place: towards the hero (-), away from it (+; the screen ends not far behind it)
+function bossPuff(b){          // a puff of dust and a small shake where the boss lands or strikes
+  if(G.boss!==b||!G.bossArrived||QUAL==='low') return;
+  const p=b.root.position; burst(V3(p.x+(b.off||0),.15,p.z-.5),{tex:'dot',count:14,power:3,size:.5,c1:[1,1,1],c2:[.82,.85,1],life:.6,grav:-1}); G.shake=Math.max(G.shake,.14);
+}
+function bossRoam(b,cfg={}){
+  const S={x:0,y:0,z:0,face:0,spin:0,sq:0,v:0,run:0,air:0,walk:0,name:'rest',u:0,dur:1,from:0,to:0};
+  const W=Object.assign({rest:2.4,stride:3,hop:2.2,charge:2,spin:1.2,taunt:1.4},cfg.weights||{});
+  let tPrev=null, hold=0, last='', phase=0, landed=false;
+  const RX=[ROAM_X[0],cfg.xmax??ROAM_X[1]];                       // (a wide boss gets less room on the far side)
+  const clampX=x=>Math.max(RX[0],Math.min(RX[1],x)), ease=u=>u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2, lerp=(a,b,k)=>a+(b-a)*k;
+  function pick(){
+    const names=Object.keys(W).filter(n=>n!==last&&W[n]>0), tot=names.reduce((s,n)=>s+W[n],0); let r=Math.random()*tot;
+    for(const n of names){ r-=W[n]; if(r<=0) return n; } return names[0];
+  }
+  function start(name){
+    S.name=name; S.u=0; S.from=S.x; phase=0; landed=false; if(name!=='arrive') last=name;
+    if(name==='rest') S.dur=1.3+Math.random()*1.7;
+    else if(name==='stride'){ let to; do to=lerp(RX[0],RX[1],Math.random()); while(Math.abs(to-S.x)<1.8); S.to=to; S.dur=Math.max(1.2,Math.abs(to-S.x)/2.2); }
+    else if(name==='hop'){ S.to=clampX(S.x+(Math.random()<.5?-1:1)*(1.3+Math.random()*1.7)); S.dur=1.1; }
+    else if(name==='spin'){ S.to=clampX(S.x+(Math.random()-.5)*3.4); S.dur=1.35; }
+    else if(name==='charge'){ S.to=RX[0]; S.dur=3.3; }
+    else if(name==='taunt') S.dur=1.8;
+    else S.dur=99;                                    // 'arrive'
+    if(cfg.onMove) cfg.onMove(name==='charge'?'run':name,S);
+  }
+  start('rest');
+  return {S,
+    hold(sec){ hold=Math.max(hold,sec); },                                      // freeze the routine (hit / laugh / defeat reactions)
+    step(t,arrived){
+      const dt=tPrev===null?.016:Math.min(.1,Math.max(0,t-tPrev)); tPrev=t;
+      let ft=0; S.v=0; S.run=0; S.air=0; let sq=0;
+      if(hold>0){ hold-=dt; if(hold<=0){ hold=0; start('rest'); } S.y*=.8; S.z*=.9; S.spin=0; }
+      else if(!arrived){ if(S.name!=='arrive') start('arrive'); S.v=1; S.run=1; ft=1.1; }
+      else {
+        if(S.name==='arrive') start('taunt');
+        S.u+=dt/S.dur; const u=Math.min(S.u,1), n=S.name;
+        if(n==='stride'){ S.x=lerp(S.from,S.to,ease(u)); S.v=1; ft=(S.to<S.from?1:-1)*.95*Math.min(1,u*8,(1-u)*8); }
+        else if(n==='hop'||n==='spin'){
+          const a=.14, b=.86; if(u>a&&u<b){ const k=(u-a)/(b-a); S.y=Math.sin(k*PI)*(n==='spin'?2.1:1.7); S.x=lerp(S.from,S.to,k); S.air=1; if(n==='spin') S.spin=k*PI*2; } else { S.y=0; S.spin=0; S.x=u<=a?S.from:S.to; }
+          sq=u<=a?Math.sin(u/a*PI/2):u>=b?1-(u-b)/(1-b):0;
+          if(u>=b&&!landed){ landed=true; if(cfg.onLand) cfg.onLand(S); }
+          ft=n==='hop'?(S.to<S.from?.5:-.5):0;
+        }
+        else if(n==='charge'){
+          if(u<.3){ const k=ease(u/.3); S.x=lerp(S.from,S.to,k); S.z=-1.1*k; S.v=1; S.run=1; ft=1.05; }                           // run in at the hero
+          else if(u<.58){ if(phase<1){ phase=1; if(cfg.onMove) cfg.onMove('strike',S); SFX.whoosh(); }
+            const k=(u-.3)/.28; S.x=S.to-.5*Math.sin(Math.min(1,k*1.6)*PI); S.z=-1.1; ft=.7; sq=k>.35&&k<.6?Math.sin((k-.35)/.25*PI)*.9:0;
+            if(k>.38&&phase<2){ phase=2; bossPuff(b); } }
+          else { if(phase<3){ phase=3; if(cfg.onMove) cfg.onMove('back',S); } const k=ease((u-.58)/.42); S.x=lerp(S.to,S.from,k); S.z=-1.1*(1-k); S.v=1; ft=-.9; }   // back to its place
+        }
+        else if(n==='taunt'){ ft=Math.sin(u*PI*2)*.35; }
+        if(S.u>=1){ S.y=0; S.spin=0; S.z=0; S.x=(n==='charge')?S.from:(S.x); start(pick()); }
+      }
+      S.sq+=(sq-S.sq)*Math.min(1,dt*18); S.face+=(ft-S.face)*Math.min(1,dt*(S.run?6:9));
+      S.walk+=dt*(S.run?15:S.v?8.5:0); b.off=S.x;
+    },
+  };
+}
+/* hand-built bosses: turn S into a transform on the mover node (x / y / z, facing + spin, a squash, a waddle while moving) */
+function roamPose(S,mover,o={}){
+  mover.position.set(S.x,S.y,S.z); mover.rotation.y=S.face+S.spin; mover.rotation.z=Math.sin(S.walk)*(o.waddle||0)*S.v;
+  const q=S.sq*(o.squash||.18); mover.scaling.set(1+q*.6,1-q,1+q*.6);
+}
+
+/* =====================================================================
+   BOSS MODELS WITH ANIMATION CLIPS (Quaternius "Ultimate Monsters" and "Pirate Kit", CC0; models/Monsters, models/Pirates, made with tools/gltf2glb.py).
+   The routine in bossRoam picks the moves, this plays the clip that fits (spec.clips = role -> clip names to try, in order):
+   arrive/charge -> run, stride -> walk, hop/spin -> jump, strike -> punch, taunt -> wave / yes / no, hit -> hit, defeat -> death.
+   The model is scaled to spec.height and stands on the floor. If it fails to load, the Giant Dust Bunny takes its place.
+   ===================================================================== */
+const BIG_CLIPS={idle:'Idle',walk:'Walk',run:'Run',jump:'Jump',punch:['Punch','Weapon'],wave:'Wave',yes:'Yes',no:'No',hit:'HitReact',death:'Death'};
+const BOSS_FACE_SIGN=1;       // +1 / -1: which way a positive turn about y looks (so the boss faces the hero when it runs towards it)
+async function bossModel(spec){
+  let root=null;
+  try{
+    const res=await glbImport(spec.file);
+    root=nd(null,0,0,0); const wob=nd(root,0,0,0), mover=nd(wob,0,0,0), holder=nd(mover,0,0,0);
+    const fix=nd(holder,0,0,0);                                                   // fix: moves the model's middle onto the holder's pivot, so that it turns on the spot
+    holder.rotation.y=PI; res.meshes[0].parent=fix;                               // (the models arrive facing away from the camera, like the pig)
+    const meshes=res.meshes.filter(m=>m.getTotalVertices&&m.getTotalVertices()>0);
+    // scale to the wanted height and put the feet on the floor
+    let lo=1e9,hi=-1e9,x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;
+    meshes.forEach(m=>{ m.computeWorldMatrix(true); const bb=m.getBoundingInfo().boundingBox; lo=Math.min(lo,bb.minimumWorld.y); hi=Math.max(hi,bb.maximumWorld.y);
+      x0=Math.min(x0,bb.minimumWorld.x); x1=Math.max(x1,bb.maximumWorld.x); z0=Math.min(z0,bb.minimumWorld.z); z1=Math.max(z1,bb.maximumWorld.z); });
+    fix.position.set((x0+x1)/2,0,(z0+z1)/2);                                       // (measured with the holder turned half a circle, so the centre is the mirror image)
+    holder.rotation.y=spec.face??PI;
+    /* Stay behind the letter signs (they stand at z=0, the boss at z=1.8): the model is pushed back by its own radius, so its front edge never reaches the
+       signs, even while it spins or hops, and it is scaled up by the same perspective factor so it does not look smaller. */
+    const k0=spec.height/Math.max(.1,hi-lo), radius=Math.hypot(x1-x0,z1-z0)/2*k0, zoff=Math.max(0,radius-1.45)+.9, k=k0*(14+zoff)/14;
+    holder.scaling.setAll(k); holder.position.y=-lo*k-.02;
+    /* The colour map of these models is a tiny palette (every triangle points at one square of colour). Drawn as it is (smoothed, with mipmaps) it came out
+       muddy and dark, so it is copied into a plain texture without smoothing, and lightened (spec.light) because the palette colours are on the dull side. */
+    const olds=[], mats=[]; meshes.forEach(m=>{ if(m.material) olds.push(m.material); });
+    const src=olds.map(m=>m.albedoTexture||m.diffuseTexture).find(Boolean); let tex=null;
+    if(src){
+      for(let i=0;i<60&&!src.isReady();i++) await wait(50);
+      const px=await src.readPixels(), n=src.getSize().width, L=spec.light||1.25, out=new Uint8Array(n*n*4);
+      for(let i=0;i<out.length;i+=4){ const r=px[i],g=px[i+1],bl=px[i+2], l=(r+g+bl)/3;
+        out[i]=Math.min(255,(l+(r-l)*1.15)*L); out[i+1]=Math.min(255,(l+(g-l)*1.15)*L); out[i+2]=Math.min(255,(l+(bl-l)*1.15)*L); out[i+3]=255; }       // a little more colour, and lighter
+      tex=new BABYLON.RawTexture(out,n,n,BABYLON.Engine.TEXTUREFORMAT_RGBA,scene,false,false,BABYLON.Texture.NEAREST_SAMPLINGMODE);
+    }
+    meshes.forEach(m=>{ glbToon(m,.003,tex); mats.push(m.material); });
+    const cm=new BABYLON.StandardMaterial('bossShadow',scene); cm.disableLighting=true; cm.diffuseColor=BABYLON.Color3.Black(); cm.emissiveColor=BABYLON.Color3.FromHexString('#1a1c5c'); cm.alpha=.42;
+    const cs=BABYLON.MeshBuilder.CreateDisc('bossContact',{radius:1,tessellation:32},scene); cs.rotation.x=PI/2; cs.scaling.set(spec.height*.3,spec.height*.2,1); cs.position.set(0,.045,.1);
+    cs.parent=mover; cs.material=cm; cs.isPickable=false;
+    // clips
+    const grp={}; res.animationGroups.forEach(a=>{ grp[a.name]=a; a.stop(); a.targetedAnimations.forEach(t=>{ t.animation.enableBlending=true; t.animation.blendingSpeed=.09; }); });
+    const clip=role=>{ const c=spec.clips[role]; return (Array.isArray(c)?c:[c]).map(n=>grp[n]).find(Boolean); };
+    let cur=null;
+    const play=(role,loop=true,speed=1)=>{ const g=clip(role)||clip('idle'); if(!g) return null;
+      if(cur===g&&loop&&g.isStarted) return g; if(cur&&cur!==g) cur.stop(); else if(cur===g) g.stop(); cur=g; g.start(loop,speed); return g; };
+    const b=bossBase(root,wob); b.name=spec.name; b.grounded=true;
+    const roam=bossRoam(b,{weights:spec.weights,xmax:spec.xmax,
+      onMove:(n)=>{ if(n==='taunt') play(rnd(['wave','yes','no']),true); else if(n==='hop'||n==='spin') play('jump',false,1.15); else if(n==='strike') play('punch',false,1.2);
+        else if(n==='run'||n==='arrive') play('run'); else if(n==='stride'||n==='back') play('walk'); else play('idle'); },
+      onLand:()=>bossPuff(b)});
+    b.roam=roam;
+    b.idle=t=>{ roam.step(t,G.bossArrived); const S=roam.S, sh=spec.shift||0; mover.position.set(S.x+sh,S.y,zoff+S.z*.15); b.off=S.x+sh; mover.rotation.y=S.face*BOSS_FACE_SIGN+S.spin; cs.scaling.set(spec.height*.3*(1-Math.min(S.y,2)*.18),spec.height*.2*(1-Math.min(S.y,2)*.18),1); };
+    const hit0=b.hit, laugh0=b.laugh;
+    b.hit=async function(...a){ roam.hold(1); play('hit',false,1.1); return hit0.apply(b,a); };
+    b.laugh=async function(...a){ roam.hold(1); play(rnd(['yes','wave']),false); return laugh0.apply(b,a); };
+    b.defeat=async function(){                    // the real "death" clip, then a poof
+      roam.hold(99); SFX.bossHit(); play('death',false,1); await wait(1250);
+      const p0=root.position.clone(); const c=V3(p0.x+(b.off||0),p0.y+2.4,p0.z);
+      burst(c,{count:60,power:9,size:.9}); shock(V3(c.x,c.y,c.z-2),{color:'#ffffff',size:10,ms:700}); flash('#ffffff'); freeze(260,.15); camPunch=1; wob.setEnabled(false);
+    };
+    const base=b.dispose; b.dispose=function(){ base(); res.animationGroups.forEach(a=>{ try{ a.stop(); a.dispose(); }catch(e){} }); mats.forEach(m=>{ try{ m.dispose(false,false); }catch(e){} }); olds.forEach(m=>{ try{ m.dispose(true,true); }catch(e){} }); try{ if(tex) tex.dispose(); }catch(e){} try{ cm.dispose(); }catch(e){} };
+    play('run');
+    return b;
+  }catch(e){ console.warn('boss model not used, using the dust bunny:',spec.file,e); if(root) root.dispose(); return bossBunny(); }
+}
+const BIGSPEC=(file,name,height,extra)=>Object.assign({file:'Monsters/'+file+'.glb',name,height,clips:BIG_CLIPS,shift:-.9},extra);
+const bossYeti=()=>bossModel(BIGSPEC('Yeti','Grumpy Yeti',5.8,{light:1.4,shift:-.7}));
+const bossBarbarossa=()=>bossModel({file:'Pirates/Captain_Barbarossa.glb',name:'Captain Barbarossa',height:5.2,light:1.15,shift:-1,clips:Object.assign({},BIG_CLIPS,{punch:['Sword','Punch']})});
+const bossPinkBlob=()=>bossModel({file:'Monsters/PinkBlob.glb',name:'Bouncy Pink Blob',height:4.4,light:1.7,shift:-1.5,weights:{charge:1.4,hop:3.4,spin:2},
+  clips:{idle:'Idle',walk:'Walk',run:'Walk',jump:'Jump',punch:'Bite_Front',wave:['Dance','Yes'],yes:'Yes',no:'No',hit:'HitRecieve',death:'Death'}});
+const bossAlien=()=>bossModel(BIGSPEC('Alien','Wobbly Alien',5.2,{light:1.6}));
+const bossDino=()=>bossModel(BIGSPEC('Dino','Dizzy Dino',5));
+const bossOrc=()=>bossModel(BIGSPEC('Orc','Grumpy Orc',5.4));
+const bossFrog=()=>bossModel(BIGSPEC('Frog','Hoppy Frog',4.6,{weights:{hop:4,spin:2}}));
+const BOSSES=[bossHomework,bossPig,bossEgg,bossImp,bossYeti,bossPinkBlob,bossBarbarossa,bossAlien,bossDino,bossOrc,bossFrog];
+const EXTRA_BOSSES=[bossImp,bossEgg,bossAlien,bossDino,bossOrc,bossFrog];      // what turns up when the tour comes round to a place again (see bossForLevel in places.js)

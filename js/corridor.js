@@ -83,8 +83,8 @@ function buildSegment(type){
   merged.isVisible=false; merged.isPickable=false; return merged;
 }
 const SEGS=[]; const SEGN=20;
-{ const protos=[0,1,2,3].map(buildSegment);
-  for(let i=0;i<SEGN;i++){ const s=protos[i%4].createInstance('seg'+i); s.position.x=i*4-24; s.isPickable=false; SEGS.push(s); } }
+const SCHOOL_PROTOS=[0,1,2,3].map(buildSegment);       // places.js builds the walls of the other places the same way and swaps them in
+for(let i=0;i<SEGN;i++){ const s=SCHOOL_PROTOS[i%4].createInstance('seg'+i); s.position.x=i*4-24; s.isPickable=false; SEGS.push(s); }
 REG=true; SEGS.forEach(s=>mirrorList.push(s));
 
 /* glossy tiled floor that follows the camera */
@@ -111,11 +111,13 @@ dust.minSize=.05; dust.maxSize=.16; dust.minLifeTime=6; dust.maxLifeTime=11; dus
 dust.color1=new BABYLON.Color4(1,1,1,.75); dust.color2=new BABYLON.Color4(.85,.88,1,.5); dust.colorDead=new BABYLON.Color4(1,1,1,0);
 dust.preWarmCycles=100; dust.preWarmStepOffset=10; dust.start();
 
+/* (the corridor above is the "School Corridor" place; the other places and the switch between them are in places.js) */
 /* graphics quality: Balanced (default), High (adds live floor reflection), Low (for slow computers) */
 const QNAME={balanced:'Balanced',high:'High',low:'Low'}; let pipeOn=!!pipe;
 /* dynamic resolution: the auto-quality check in main.js scales rendering with this (1 = the quality's
    own resolution) before it drops a whole quality level, and eases it back when there is headroom */
 let dynScale=1;
+let petalRate=4, dustRate=14;   // particles per second at Balanced/High; the current place sets these (places.js), Low uses half
 function applyResScale(){ engine.setHardwareScalingLevel((QUAL==='low'?1.3:QUAL==='high'?1.15:1)*dynScale); fit(); }
 function setDynScale(v){ dynScale=Math.max(1,Math.min(1.3,v)); applyResScale(); }
 function setQuality(q,manual){
@@ -127,7 +129,7 @@ function setQuality(q,manual){
   floorMat.reflectionTexture=hi?mirror:null; mirror.renderList=hi?mirrorList.filter(m=>SEGS.indexOf(m)<0):[];
   const ct=scene.customRenderTargets, ci=ct.indexOf(mirror);
   if(hi&&ci<0) ct.push(mirror); else if(!hi&&ci>=0) ct.splice(ci,1);
-  setEmit(petals,low?2:4); setEmit(dust,low?8:14);
+  setEmit(petals,low?Math.ceil(petalRate/2):petalRate); setEmit(dust,low?Math.ceil(dustRate/2):dustRate);
   // the post-process pipeline (bloom + FXAA) costs several full-screen passes, so only High uses it;
   // otherwise the scene's own colour grading is applied directly while drawing (no extra passes)
   const ic=scene.imageProcessingConfiguration;

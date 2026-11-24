@@ -171,7 +171,7 @@ streak.minScaleX=3; streak.maxScaleX=6; streak.minScaleY=.06; streak.maxScaleY=.
 streak.color1=new BABYLON.Color4(.3,.34,.85,.65); streak.color2=new BABYLON.Color4(1,1,1,.8); streak.colorDead=new BABYLON.Color4(.3,.34,.85,0);
 streak.start();
 /* slow falling petals / light flakes for dreaminess */
-const petals=new BABYLON.ParticleSystem('petals',56,scene);
+const petals=new BABYLON.ParticleSystem('petals',160,scene);     // room for the busiest place (snowfall, see places.js)
 petals.particleTexture=TEX.petal; petals.emitter=V3(0,0,0); petals.minEmitBox=V3(-13,4,-4); petals.maxEmitBox=V3(13,6.5,6);
 petals.direction1=V3(-.5,-.5,0); petals.direction2=V3(.2,-.15,0); petals.minEmitPower=.3; petals.maxEmitPower=.8; petals.gravity=V3(0,-.12,0);
 petals.minSize=.22; petals.maxSize=.5; petals.minLifeTime=8; petals.maxLifeTime=13; petals.emitRate=8; petals.minAngularSpeed=-1.5; petals.maxAngularSpeed=1.5;

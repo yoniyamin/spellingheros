@@ -47,6 +47,31 @@ sound-alikes such as `c`/`k`/`s`), so the game also shows which sounds need prac
 Each hero has its own move set, and there are further finisher moves (meteors, lightning, rainbow,
 fireworks and others).
 
+### Places
+
+The hero select screen has a place chip under the heroes. Use its ◀ ▶ buttons (or the ▲ ▼ keys) to choose where
+the adventure happens. The choice is remembered. The default is the **Adventure tour**: every level moves to the
+next place (school, forest, candy, snow, beach, then round again) and each place has its own boss.
+
+| Place | Look |
+|---|---|
+| 🗺️ Adventure tour | Default. A new place and a new boss on every level |
+| School corridor | The original place |
+| Haunted forest | Cute-spooky night with glowing mushrooms, a friendly ghost, an owl and fireflies. Boss: the grumpy red pig |
+| Candy land | Rainbow, lollipops, ice cream and a gingerbread house. Boss: the Bouncy Pink Blob |
+| Snowy mountain | Snowy pines, snowmen, penguins and falling snow. Boss: the Grumpy Yeti |
+| Pirate beach | Sea, palm trees, a treasure chest and a pirate flag. Boss: Captain Barbarossa |
+| 🎲 Surprise me! | A random different place at the start of every level |
+
+### Bosses
+
+Every place has its own boss the first time you get there in a run (the school has the homework monster). When you come
+back to a place, a random boss from the other pool turns up instead (Cheeky Green Imp, the egg, Wobbly Alien, Dizzy Dino,
+Grumpy Orc or Hoppy Frog), never the same one twice in a row.
+
+The bosses do not just hop: a small "director" (`bossRoam` in `js/targets.js`) strings together strolls, hops, spins, charges at
+the hero with a strike, and taunts, and plays the matching animation of the model (walk, run, jump, punch, wave...).
+
 ### Rewards
 
 - 🪙 **Coins** and ⭐ **stars** are earned by spelling correctly. Combos give bonuses.
@@ -86,7 +111,7 @@ fireworks and others).
 | Input | Use |
 |---|---|
 | Mouse / touch | Click signs, heroes and buttons |
-| Keyboard | `1`-`4` choose a letter sign, arrow keys move, `Enter` / `Space` confirm, `Esc` back, `P` pause, `R` hear the word, `M` music, `T` timer, `G` graphics |
+| Keyboard | `1`-`4` choose a letter sign, arrow keys move, `Enter` / `Space` confirm, `Esc` back, `▲` `▼` change place (hero select), `P` pause, `R` hear the word, `M` music, `T` timer, `G` graphics |
 | PS4 controller | ✕ ○ □ △ for the four signs, D-pad / stick to move, R1 hears the word, Options pauses |
 
 The game can be paused at almost any moment (`P`, `Esc`, Options, or the ⏸ button), and it pauses by itself when the
@@ -124,22 +149,29 @@ the browser's `localStorage` under the key `spellingHeroes_v1`.
 │   ├── engine.js     Babylon.js set-up, lighting and quality levels, mesh helpers, particles, screen effects
 │   ├── tween.js      small tween / pose scheduler (frozen while paused)
 │   ├── fx.js         particles and power effects
-│   ├── corridor.js   the 3D school corridor scene
+│   ├── corridor.js   the 3D school corridor scene (the default place)
+│   ├── places.js     the other places (haunted forest, candy land, snowy mountain, pirate beach) and place switching
 │   ├── rig.js        the block-figure hero rig, the three heroes and their move sets
 │   ├── targets.js    the letter signs and the bosses
 │   ├── input.js      keyboard, mouse and PS4 controller handling
 │   ├── game.js       game state, screens, wardrobe, word editor, game flow (levels, words, finishers, report, chest)
 │   └── main.js       start-up and the main loop
-├── models/           Kenney hero GLBs, boss, weapons (CC0 / kit licenses in models/)
+├── models/           Kenney hero GLBs, weapons, bosses (Monsters/, Pirates/, Imp; CC0 / kit licenses in models/)
+├── tools/            gltf2glb.py: packs a Quaternius .gltf (embedded buffer) into a compact .glb
 └── Backup/           older snapshots (not part of the game; ignored by git)
 ```
 
 The scripts are plain (non-module) files that share one global scope, so **the load order in `index.html`
-matters**: `settings` → `audio` → `engine` → `tween` → `fx` → `corridor` → `rig` → `targets` → `input` → `game` → `main`.
+matters**: `settings` → `audio` → `engine` → `tween` → `fx` → `corridor` → `places` → `rig` → `targets` → `input` → `game` → `main`.
 
 ## Notes for changing things
 
 - **Hero names / descriptions:** the `HEROES` array in `js/rig.js`.
+- **Adding a place:** add an entry to the `PLACES` array in `js/places.js` (colours, fog, floor painter, four scenery
+  segment builders, a sky painter, particle settings). Scenery is built from merged meshes and built lazily the first time
+  the place is used (or a little ahead of time during the tour). Add it to `TOUR` and give it a `tour:()=>boss` to put it
+  in the adventure tour. Keep the scenery light: ~16 copies are on screen at once, so `places.js` scales down sphere,
+  cylinder and torus detail (`LOD_S`, `LOD_C`, `LOD_T`). Nodes that must survive `sweepScene()` in `js/game.js` are registered with `keepNode`.
 - **Default words and packs:** `DEFAULT_WORDS` and `WORD_PACKS` in `js/settings.js`; automatic picture guesses are in `EMOJI_DICT`; picker pictures are in `EMOJI_CATS`.
 - **Wrong-letter behaviour:** `CONFUSABLE` in `js/settings.js`.
 - **Challenge numbers:** `LIVES_PER_BOSS`, `LETTER_TIME` and `BLANK_SHARE` in `js/settings.js`.

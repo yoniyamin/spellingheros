@@ -1,0 +1,11 @@
+Pirate Kit - Nov 2023 - Captain Barbarossa
+
+This game uses the "Captain Barbarossa" character from Quaternius' Pirate Kit
+(models/Pirates/Captain_Barbarossa.glb, packed from the original .gltf with tools/gltf2glb.py).
+
+Created by Quaternius (https://quaternius.com). Quaternius publishes this kit as CC0 (public domain)
+on his site; the downloaded folder did not contain a license file, so please check
+https://quaternius.com if you plan to redistribute the game.
+
+The monsters in models/Monsters/ (Yeti, Alien, Dino, Orc, Frog, Pink Blob) come from Quaternius'
+Ultimate Monsters pack, CC0: see License-Ultimate-Monsters-CC0.txt.

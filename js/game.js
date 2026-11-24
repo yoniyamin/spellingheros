@@ -91,7 +91,27 @@ function layoutSelect(){
   const h=HEROES[G.heroIdx]; $('heroName').textContent=h.name; $('heroDesc').textContent=h.desc;
 }
 function enterSelect(){
-  G.state='select'; document.body.classList.remove('playing'); setScreens('select'); layoutSelect(); G.camTarget=0; refreshStats(); updateMenuLabels();
+  const home=placeForLevel(1); if(home&&PLACE.id!==home.id) setPlace(home.id);        // coming back from a run of other places: show the start place again
+  G.state='select'; document.body.classList.remove('playing'); setScreens('select'); layoutSelect(); G.camTarget=0; refreshStats(); updateMenuLabels(); renderPlace();
+}
+
+/* ---------------- places (see places.js): chosen on the select screen, or a different one on every level ---------------- */
+function renderPlace(){
+  const ch=PLACE_CHOICES.find(c=>c.id===save.place)||PLACE_CHOICES[0];
+  $('placeIcon').textContent=ch.icon; $('placeName').textContent=ch.name; $('placeDesc').textContent=ch.desc;
+}
+function cyclePlace(dir){
+  const i=Math.max(0,PLACE_CHOICES.findIndex(c=>c.id===save.place)), ch=PLACE_CHOICES[(i+dir+PLACE_CHOICES.length)%PLACE_CHOICES.length];
+  save.place=ch.id; persist(); SFX.swap();
+  const to=placeForLevel(1);
+  if(to&&to.id!==PLACE.id){ setPlace(to.id); flash('#ffffff',.35); }        // the scene behind the menu changes right away, so the child can see it
+  renderPlace();
+}
+/* at the start of every level: a fixed place stays; the tour moves to the next place; "Surprise me" to a random other one (the flash hides the swap) */
+function pickLevelPlace(){
+  const next=placeForLevel(G.level)||rnd(PLACES.filter(p=>p.id!==PLACE.id));
+  if(next.id!==PLACE.id){ setPlace(next.id); flash('#ffffff',.7); }
+  prepNextPlace(G.level);
 }
 
 /* ---------------- wardrobe ---------------- */
@@ -195,6 +215,8 @@ function onInput(a){
     case 'title': SFX.ding(0); enterSelect(); break;
     case 'select':
       if(a==='left'||a==='right'){ G.heroIdx=(G.heroIdx+(a==='right'?1:-1)+HEROES.length)%HEROES.length; SFX.swap(); layoutSelect(); }
+      else if(a==='up'||a==='pleft') cyclePlace(-1);
+      else if(a==='down'||a==='pright') cyclePlace(1);
       else if(a==='A'){ if(!WORDS.length){ toast('Add some words first! 📝'); openWords(); break; } save.hero=G.heroIdx; persist(); run(startRun); }
       else if(a==='Y'){ G.state='shop'; shopIdx=0; setScreens('shop'); renderShop(); SFX.swap(); }
       else if(a==='X'){ G.state='locker'; setScreens('locker'); renderLocker(); SFX.swap(); }
@@ -240,7 +262,7 @@ let BASE=null;
 function snapshotScene(){ BASE=new Set([...scene.meshes,...scene.transformNodes]); }
 function sweepScene(){
   if(!BASE) return;
-  [...scene.meshes,...scene.transformNodes].forEach(n=>{ if(!BASE.has(n)&&!n.parent&&!n.isDisposed()){ try{ n.dispose(); }catch(e){} } });
+  [...scene.meshes,...scene.transformNodes].forEach(n=>{ if(!BASE.has(n)&&!PLACE_KEEP.has(n)&&!n.parent&&!n.isDisposed()){ try{ n.dispose(); }catch(e){} } });     // (the scenery of the places is built later on demand, see places.js)
 }
 function resetRigPose(rig){
   JN.forEach(n=>{ const p=REST[n]||[0,0,0]; rig.j[n].rotation.set(p[0],p[1],p[2]); });
@@ -298,7 +320,8 @@ async function startRun(){
 }
 async function startLevel(){
   G.state='play'; G.lock=true; G.bossHP=WORDS_PER_LEVEL; G.results=[]; G.lives=LIVES_PER_BOSS; renderLives(); stopTimer(); refreshStats();
-  const mk=BOSSES[(G.level-1)%BOSSES.length], rig0=G.rig; const boss=await mk();       // a boss can be a .glb model, which loads asynchronously
+  pickLevelPlace();
+  const mk=bossForLevel(G.level), rig0=G.rig; const boss=await mk();                   // a boss can be a .glb model, which loads asynchronously (the place can have its own order of bosses)
   if(!G.rig||G.rig!==rig0){ boss.dispose(); return; }                                  // the player went back to hero select while it was loading
   G.boss=boss; G.boss.root.position.set(G.rig.root.position.x+30,0,1.8);
   blob(G.boss.root,2.4).position.z=-.2; outlineNode(G.boss.root,.045); G.bossArrived=false;
@@ -365,11 +388,31 @@ async function launchDummy(d){
   await tween(950,k=>{ p.x=p0.x+vx*k*2; p.z=p0.z+vz*k*2; p.y=p0.y+vy*k*2-9*k*k*2.2; d.root.rotation.z=k*sp; d.root.rotation.x=k*sp*.6; },E.lin);
   disposeDummy(d);
 }
+/* a wrong letter: the dummy hits back first. It winds up, whirls its arms and smacks the hero, who is knocked back, seeing stars
+   (the hero then dashes in again and does the normal attack that launches the dummy). */
+async function dummyCounter(d){
+  const rig=G.rig, p=rig.root.position, dp=d.root.position, dx=dp.x, hx=p.x;
+  d.alive=false; rig.busy=true; rig.moving=false;               // not alive: the idle wobble in main.js must not fight the swing
+  SFX.whoosh();
+  await tween(160,k=>{ dp.x=dx+.5*k; d.root.rotation.z=-.3*k; d.root.scaling.set(1-.08*k,1+.12*k,1); });             // wind up: lean back
+  await tween(110,k=>{ dp.x=dx+.5-1.5*k; d.root.rotation.z=-.3+.6*k; d.root.scaling.setAll(1); d.arms.rotation.y=k*PI*2; },E.in);   // smack
+  d.arms.rotation.y=0;
+  const hit=p.add(V3(0,1.6,0));
+  SFX.bonk(); setTimeout(()=>SFX.boing(),120); G.shake=.4; camPunch=.4; freeze(80,.06); flash('#ff4040',.25);
+  shock(hit.add(V3(0,0,-.6)),{color:'#ff6b6b',size:3.2,ms:340}); popText(rnd(['OUCH!','BONK!','OOF!','YOWCH!']),hit.add(V3(0,.4,0)),'#ff6b6b');
+  burst(hit,{count:18,power:5,size:.4,c1:[1,.4,.3],c2:[1,.85,.4]}); powFx(hit);
+  const settle=tween(300,k=>{ dp.x=dx-1+k; d.root.rotation.z=.3*(1-k); });          // the dummy settles back onto its spot
+  poseTo(rig,{upper:[-.5,0,0],head:[-.5,0,0],armR:[-.8,0,1.2],armL:[-.8,0,-1.2],legR:[.3,0,0],legL:[-.3,0,0]},90);
+  await tween(340,k=>{ p.x=hx-2.2*k; p.y=Math.sin(k*PI)*.9; },E.out);               // the hero is knocked back with a little hop
+  p.y=0; emojiBurst(p.add(V3(0,2.4,0)),['💫'],{count:3,size:.6,power:2,life:.9,grav:-1});
+  await Promise.all([settle,poseTo(rig,{},160)]); rig.busy=false;
+}
 async function wrong(d){
   const rig=G.rig, x0=rig.root.position.x; G.combo=0; setCombo(); G.wordMistakes++; G.wrongRow++;
   if(G.rec) G.rec.miss.push({i:G.idx,l:d.letter});
   SFX.wrong(); SFX.whoosh(); Music.stinger('wrong'); loseLife();
   await dashTo(rig,d.root.position.x-1.75,260);
+  await dummyCounter(d); await dashTo(rig,d.root.position.x-1.75,180);          // the dummy hits back, then the hero charges in again
   let mv; do{ mv=rnd(rig.hero.moves); }while(mv===rig.lastMove&&rig.hero.moves.length>1); rig.lastMove=mv;
   const tp=d.root.position.clone(); tp.y=1.6;
   await seq(rig,MOVES[mv],lvl=>{
@@ -400,7 +443,8 @@ async function bossWins(){
   const rig=G.rig, b=G.boss; if(!rig||!b) return;
   const w=b.wob, j=rig.j, p=rig.root.position, x0=p.x; rig.busy=true; rig.moving=false; rig.cheer=false;
   callout('😈 BOSS SMASH!','#ff6b6b'); SFX.whoosh();
-  const reach=Math.max(6,b.root.position.x-x0-3);                       // the boss root keeps following the hero, so lunge with the wob node
+  if(b.roam) b.roam.hold(3);                                            // the boss stops wandering while it strikes
+  const reach=Math.max(6,b.root.position.x+(b.off||0)-x0-3);            // the boss root keeps following the hero, so lunge with the wob node
   await tween(420,k=>{ w.position.x=k*1.8; w.rotation.z=-k*.25; w.scaling.set(1-k*.06,1+k*.14,1); });          // wind up: lean back, stretch
   SFX.whoosh();
   await tween(190,k=>{ w.position.x=1.8-(1.8+reach)*k; w.rotation.z=-.25+.55*k; w.scaling.set(.94+k*.06,1.14-k*.14,1); },E.in);   // lunge
@@ -455,7 +499,7 @@ async function correct(d){
   rig.cheer=true; await wait(520); rig.cheer=false;
   await dashTo(rig,rig.root.position.x+STEP,STEP*125); await spawnOptions();
 }
-function bossTarget(){ const t=G.boss.root.position.clone(); t.y=2.3; return t; }
+function bossTarget(){ const t=G.boss.root.position.clone(); t.x+=G.boss.off||0; t.y=2.3; return t; }      // (off: how far the boss has wandered from its place, see bossRoam)
 /* throwProj, makeStar, POSE_*, FIN and SHARED_FIN live in finishers.js */
 let lastFin=null;
 function chooseFinisher(rig){ let k, n=0; do{ k=Math.random()<.3?rig.hero.finisher:rnd(SHARED_FIN); }while(k===lastFin&&++n<10); lastFin=k; return k; }

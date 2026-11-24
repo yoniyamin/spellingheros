@@ -1,7 +1,8 @@
-	Bestiary - Dungeon Monsters Kit [Standard] — Puglin
+	Bestiary - Dungeon Monsters Kit [Standard] — Puglin and Imp
 
-	This game uses the "Puglin" character from Quaternius' Bestiary - Dungeon Monsters Kit
-	(files in this folder: Puglin.glb; boss texture Puglin-red.png is a recolour for this project).
+	This game uses the "Puglin" and "Imp" characters from Quaternius' Bestiary - Dungeon Monsters Kit
+	(files in this folder: Puglin.glb, Imp.glb; boss texture Puglin-red.png is a recolour for this project,
+	Textures/Imp-green.png is the Imp's texture; Imp.glb has unused data stripped to reduce its size).
 
 	Created/distributed by Quaternius (https://quaternius.com)
 

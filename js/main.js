@@ -38,7 +38,7 @@ scene.onBeforeRenderObservable.add(()=>{
   camera.position.set(G.camX+sx,2.7+sy,-12.2); camT.set(G.camX,1.8,0); camera.setTarget(camT);
   if(G.state==='play'||G.state==='chest'||G.state==='busy'){ if(G.rig) G.camTarget=G.rig.root.position.x+5.5; }
   SEGS.forEach(s=>{ if(s.position.x<G.camX-26) s.position.x+=SEGN*4; });
-  dust.emitter.x=G.camX; petals.emitter.x=G.camX+2; floor.position.x=Math.round((G.camX+14)/4)*4;
+  dust.emitter.x=G.camX; petals.emitter.x=G.camX+2; floor.position.x=Math.round((G.camX+14)/4)*4; placeFollow(G.camX);
   sun.position.set(G.camX+4-sunDir.x*30,-sunDir.y*30,-1-sunDir.z*30);
   if(G.rig){ const rp=G.rig.root.position; streak.emitter.x=rp.x-.3; streak.emitter.y=rp.y; streak.emitter.z=rp.z; setEmit(streak,G.rig.dashing?90:0); }
   else setEmit(streak,0);
