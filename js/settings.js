@@ -40,6 +40,7 @@ const BTN = [ {sym:'✕',color:'#6ba3ff'}, {sym:'○',color:'#ff6b6b'}, {sym:'�
 /* ---------------- ready-made word packs (Words screen) ---------------- */
 const WORD_PACKS = [
   {name:'⭐ Starter (ee / ay)', words:DEFAULT_WORDS},
+  {name:'🌙 igh', words:[{w:'night',e:'🌃'},{w:'high',e:'🏔️'},{w:'light',e:'💡'},{w:'right',e:'✅'},{w:'bright',e:'🌟'},{w:'fight',e:'🥊'},{w:'tights',e:'🧦'}]},
   {name:'🐾 Animals', words:[{w:'cat',e:'🐱'},{w:'dog',e:'🐶'},{w:'fish',e:'🐟'},{w:'frog',e:'🐸'},{w:'duck',e:'🦆'},{w:'pig',e:'🐷'},{w:'cow',e:'🐮'},{w:'fox',e:'🦊'},{w:'bear',e:'🐻'},{w:'owl',e:'🦉'}]},
   {name:'🎨 Colors', words:[{w:'red',e:'🟥'},{w:'blue',e:'🟦'},{w:'green',e:'🟩'},{w:'yellow',e:'🟨'},{w:'pink',e:'🌸'},{w:'black',e:'⬛'},{w:'white',e:'⬜'},{w:'brown',e:'🟫'},{w:'purple',e:'🟪'}]},
   {name:'🌧️ ai / oa', words:[{w:'rain',e:'🌧️'},{w:'train',e:'🚆'},{w:'snail',e:'🐌'},{w:'tail',e:'🐒'},{w:'boat',e:'⛵'},{w:'goat',e:'🐐'},{w:'coat',e:'🧥'},{w:'road',e:'🛣️'},{w:'soap',e:'🧼'}]},

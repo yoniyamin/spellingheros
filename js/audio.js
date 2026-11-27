@@ -57,7 +57,9 @@ const SFX = {
 
 /* ---------------------------------------------------------------------
    MUSIC - generated live, no audio files.
-   140 BPM, Japanese "hirajoshi" scale. It is a whole song now, not a 4-bar loop:
+   There is one song per place (see SONGS and SONG_OF_PLACE below); menus play the "dojo" song, and the music
+   fades from one song to the next when a level moves to a new place. The "dojo" song is 140 BPM, Japanese
+   "hirajoshi" scale. Every song is a whole song, not a 4-bar loop:
      8 sections x 4 bars (about a minute) : A  A'  B  A  C(breakdown)  D(build-up)  B  A'
      every time the song comes round again it changes key, and each bar has a
      small chance of a different melody phrase or an echo, so it rarely sounds the same twice.
@@ -68,8 +70,8 @@ const SFX = {
      boss at 3 hearts -> hats double up to 16ths
    --------------------------------------------------------------------- */
 const Music=(()=>{
-  const BPM=140, SPS=60/BPM/4, A2=110;
   const hz=(b,s)=>b*Math.pow(2,s/12);
+  const rep=(n,fn)=>Array.from({length:n},(_,i)=>fn(i));
   const ARPS=[
     [0,7,12,15,12,7,3,7, 0,7,12,19,15,12,7,3],
     [0,12,7,12,15,12,7,12, 0,12,8,12,15,12,19,12],
@@ -116,8 +118,76 @@ const Music=(()=>{
   };
   const FORM=['A','A2','B','A','C','D','B','A2'];
   const KEYS=[0,2,-3];                                        // key change every time the song repeats
+
+  /* ---- SONG 2: "School Bell March" (level 1 / the school) ----
+     120 BPM, C major pentatonic, marimba lead, kalimba arpeggio, tuba bass, woodblock + snare march.
+     Bass values: 1 = root, 2 = octave up, 3 = fifth. Phrase notes are semitones above C4. */
+  const S_ARPS=[
+    [0,7,12,7, 14,12,7,12, 0,7,12,7, 14,12,7,12],
+    [12,7,0,7, 12,14,12,7, 12,7,0,7, 14,12,14,19],
+    [0,12,7,12, 14,12,7,12, 0,12,7,12, 19,14,12,7],
+    [0,7,12,14, 12,7,12,7, 0,7,12,14, 12,7,12,19],
+  ];
+  const S_BASSES=[
+    [1,0,0,0, 3,0,0,0, 1,0,0,0, 3,0,0,1],
+    [1,0,1,0, 3,0,3,0, 1,0,1,0, 3,0,2,0],
+    [1,0,0,1, 3,0,0,3, 1,0,0,1, 3,0,2,0],
+    [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],                     // breakdown: long notes
+  ];
+  const S_KICKS=[
+    [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
+    [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,1,0],
+    [1,0,0,0, 0,0,1,0, 1,0,0,0, 0,0,1,0],
+  ];
+  const S_WOOD=[0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0];
+  const S_SNAR=[0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
+  const S_PH=[
+    [[0,7,2],[2,9,2],[4,12,4],[8,9,2],[10,7,2],[12,4,4]],                            //  0 A  - rising bell tune
+    [[0,4,2],[2,7,2],[4,9,2],[6,7,2],[8,12,4],[12,9,2],[14,7,2]],                    //  1
+    [[0,12,2],[2,14,2],[4,16,4],[8,14,2],[10,12,2],[12,9,4]],                        //  2
+    [[0,7,2],[2,4,2],[4,2,2],[6,4,2],[8,7,4],[12,0,4]],                              //  3    (comes home to C)
+    [[0,12,3],[3,9,1],[4,7,2],[6,9,2],[8,12,2],[10,14,2],[12,12,4]],                 //  4 A' - a little busier
+    [[0,9,2],[2,12,2],[4,14,2],[6,12,2],[8,9,4],[12,7,4]],                           //  5
+    [[0,12,2],[2,16,2],[4,19,4],[8,16,2],[10,14,2],[12,12,4]],                       //  6 B  - higher, bright
+    [[0,14,2],[2,16,2],[4,19,2],[6,21,2],[8,19,4],[12,16,4]],                        //  7
+    [[0,19,2],[2,16,2],[4,14,2],[6,12,2],[8,14,4],[12,7,4]],                         //  8
+    [[0,14,4],[4,12,2],[6,9,2],[8,7,6],[14,9,2]],                                    //  9
+    [[0,12,8],[8,9,8]],                                                              // 10 C  - breakdown
+    [[0,7,8],[8,9,8]],                                                               // 11
+    [[0,4,4],[4,7,4],[8,9,8]],                                                       // 12
+    [[0,9,2],[2,9,2],[4,12,2],[6,9,2],[8,14,2],[10,12,2],[12,9,2],[14,7,2]],         // 13 D  - build-up
+    [[0,12,2],[2,12,2],[4,14,2],[6,12,2],[8,16,2],[10,14,2],[12,12,2],[14,9,2]],     // 14
+    [[0,16,1],[1,14,1],[2,12,1],[3,9,1],[4,7,1],[5,9,1],[6,12,1],[7,14,1],[8,19,8]], // 15
+  ];
+  const S_SEC={                                               // chords: C, G, Am, F  (roots in semitones from C)
+    A :{roots:[0,-5,-3,-7], arp:0, bass:0, kick:0, drums:1, lead:[0,1,2,3]},
+    A2:{roots:[0,-5,-3,-7], arp:1, bass:1, kick:1, drums:1, lead:[4,5,2,3]},
+    B :{roots:[-7,0,-5,-5], arp:2, bass:2, kick:2, drums:1, lead:[6,7,8,9], bell:1},
+    C :{roots:[0,-3,-7,-5], arp:3, bass:3, kick:1, drums:0, lead:[10,11,10,12], bell:1},
+    D :{roots:[-7,-7,-5,-5], arp:2, bass:0, kick:2, drums:1, lead:[13,14,13,15], build:1},
+  };
+
+  /* ---- the song list. A song is plain data: tempo, key note, patterns, form and which instruments play it.
+     spb = steps per bar, swing = how late the off-beat 16ths come (0..0.5), hat/hat16 = hi-hat loudness per step
+     (hat16 is added when the boss is nearly beaten), reg = octave of the tonic for each part. ---- */
+  const SONGS={
+    dojo:{bpm:140, base:110, spb:16, swing:0, pad:'triangle', open:14, reg:{pad:2,arp:4,lead:2,bell:4},
+      voice:{lead:'saw',arp:'tri',bass:'saw',perc:'taiko'},
+      hat:rep(16,i=>i%2?0:(i%4===2?.9:.6)), hat16:rep(16,i=>i%2?.4:0),
+      ARPS,BASSES,KICKS,TAIK,SNAR,PH,SEC,FORM,KEYS},
+    school:{bpm:120, base:130.81, spb:16, swing:0, pad:'triangle', open:14, reg:{pad:2,arp:4,lead:2,bell:4},
+      voice:{lead:'marimba',arp:'kalimba',bass:'tuba',perc:'wood'},
+      hat:[.5,0,.7,0, .5,0,.7,0, .5,0,.7,0, .5,0,.9,0], hat16:rep(16,i=>i%2?.3:0),
+      ARPS:S_ARPS,BASSES:S_BASSES,KICKS:S_KICKS,TAIK:S_WOOD,SNAR:S_SNAR,PH:S_PH,SEC:S_SEC,
+      FORM:['A','A2','B','A','C','D','B','A2'],KEYS:[0,2,5]},
+  };
+  /* which song belongs to which place (anything not listed here plays the "dojo" song) */
+  const SONG_OF_PLACE={school:'school'};
+  const placeSong=()=>{ try{ return SONG_OF_PLACE[PLACE.id]||'dojo'; }catch(e){ return 'dojo'; } };
+
   const T={pad:0,kick:0,taiko:0,snare:0,hat:0,bass:0,arp:0,lead:0,bell:0}, layers={};
-  let ctx=null,bus=null,duckG=null,filt=null,noiseBuf=null,timer=null,worker=null,step=0,nextT=0,started=false,H16=false;
+  let S=SONGS.dojo, SPS=60/S.bpm/4, pending=null, swapAt=0;   // S = the song playing now, pending = the song we are fading to
+  let ctx=null,bus=null,xf=null,duckG=null,filt=null,noiseBuf=null,timer=null,worker=null,step=0,nextT=0,started=false,H16=false;
   let barLead=null, barEcho=false;
 
   function osc(type,f,t,dur,dest,peak,o={}){
@@ -144,31 +214,49 @@ const Music=(()=>{
   const arp  =(t,f)=>osc('triangle',f,t,.2,layers.arp,.16,{filter:{type:'lowpass',f:3600,f2:1100}});
   const lead =(t,f,d)=>{ osc('sawtooth',f,t,d*1.2,layers.lead,.1,{a:.012,filter:{type:'lowpass',f:2600,q:2}}); osc('square',f*1.004,t,d*1.2,layers.lead,.04,{a:.012}); };
   const bell =(t,f)=>{ osc('sine',f,t,.9,layers.bell,.08,{a:.005}); osc('sine',f*2.01,t,.35,layers.bell,.025,{a:.003}); };
-  const pad  =(t,root)=>[0,7,14,19].forEach(o=>osc('triangle',hz(A2*2,root+o),t,SPS*16*1.1,layers.pad,.05,{a:.6}));
+  const pad  =(t,root)=>[0,7,14,19].forEach(o=>osc(S.pad,hz(S.base*S.reg.pad,root+o),t,SPS*S.spb*1.1,layers.pad,.05,{a:.6}));
+  const wood =(t,v)=>{ osc('sine',1000,t,.07,layers.taiko,.5*v,{a:.001,f2:680}); osc('triangle',2100,t,.03,layers.taiko,.14*v,{a:.001}); };
+  const marimba=(t,f,d)=>{ const l=Math.min(d*1.3,.6); osc('sine',f,t,l+.1,layers.lead,.22,{a:.003}); osc('sine',f*4,t,.1,layers.lead,.07,{a:.002}); osc('triangle',f*2,t,l*.6,layers.lead,.05,{a:.003}); };
+  const kalimba=(t,f)=>{ osc('sine',f,t,.28,layers.arp,.2,{a:.002}); osc('sine',f*3,t,.06,layers.arp,.05,{a:.002}); };
+  const tuba =(t,f,d)=>{ osc('square',f,t,d,layers.bass,.2,{a:.012,filter:{type:'lowpass',f:650,f2:320,q:1}}); osc('sine',f,t,d,layers.bass,.25,{a:.01}); };
+  /* instruments a song can pick (see "voice" in SONGS) */
+  const VOICE={ lead:{saw:lead,marimba}, arp:{tri:arp,kalimba}, bass:{saw:bass,tuba}, perc:{taiko,wood} };
 
   function sched(s,t){
-    const st=s%16, barN=s>>4, secN=Math.floor(barN/4), bar=barN%4;
-    const sec=SEC[FORM[secN%FORM.length]], key=KEYS[Math.floor(secN/FORM.length)%KEYS.length];
-    const root=sec.roots[bar]+key, fill=bar===3&&st>=12, roll=sec.build&&bar===3&&st>=8, full=sec.drums>=1;
-    if(st===0){ let p=sec.lead[bar]; if(Math.random()<.2) p=rnd(sec.lead); barLead=PH[p]; barEcho=Math.random()<.18; }
+    const spb=S.spb, st=s%spb, barN=Math.floor(s/spb), secN=Math.floor(barN/4), bar=barN%4;
+    const sec=S.SEC[S.FORM[secN%S.FORM.length]], key=S.KEYS[Math.floor(secN/S.FORM.length)%S.KEYS.length];
+    const root=sec.roots[bar]+key, fill=bar===3&&st>=spb-4, roll=sec.build&&bar===3&&st>=spb-8, full=sec.drums>=1;
+    const V=S.voice, base=S.base, rg=S.reg;
+    if(S.swing&&st%2===1) t+=S.swing*SPS;
+    if(st===0){ let p=sec.lead[bar]; if(Math.random()<.2) p=rnd(sec.lead); barLead=S.PH[p]; barEcho=Math.random()<.18; }
     if(T.pad>.02&&st===0) pad(t,root);
-    if(T.kick>.02&&full&&!roll&&KICKS[sec.kick][st]) kick(t,st%4===0?1:.75);
-    if(T.taiko>.02){ if(fill&&!roll) tom(t,[240,200,170,140][st-12]); else if(TAIK[st]) taiko(t,st===0?1:.8,st===3?1.15:1); }
-    if(T.snare>.02){ if(roll) snare(t,.3+(st-8)*.09); else if(full&&(SNAR[st]||fill)) snare(t,fill?.7:1); }
-    if(T.hat>.02){ if(st%2===0||H16) hat(t,st%4===2?.9:(st%2===0?.6:.4),st===14&&bar%2===1);
+    if(T.kick>.02&&full&&!roll&&S.KICKS[sec.kick][st]) kick(t,st%4===0?1:.75);
+    if(T.taiko>.02){ if(fill&&!roll) tom(t,[240,200,170,140][st-(spb-4)]); else if(S.TAIK[st]) VOICE.perc[V.perc](t,st===0?1:.8,st===3?1.15:1); }
+    if(T.snare>.02){ if(roll) snare(t,.3+(st-(spb-8))*.09); else if(full&&(S.SNAR[st]||fill)) snare(t,fill?.7:1); }
+    if(T.hat>.02){ const hv=S.hat[st]||(H16?S.hat16[st]:0); if(hv) hat(t,hv,st===S.open&&bar%2===1);
       if(st===0&&bar===0&&T.kick>.5&&full) nz(t,1.4,layers.hat,.35,{f:4000,f2:2500}); }
-    const bp=BASSES[sec.bass][st];
-    if(T.bass>.02&&bp) bass(t,hz(A2,root)*(bp===2?2:1),SPS*(sec.bass===3?7:1.7));
-    if(T.arp>.02&&(T.arp>.5||st%2===0)) arp(t,hz(A2*4,root+ARPS[sec.arp][st]));
-    if(T.lead>.02&&barLead) for(const n of barLead) if(n[0]===st) lead(t,hz(220,n[1]+key),n[2]*SPS);
+    const bp=S.BASSES[sec.bass][st];
+    if(T.bass>.02&&bp) VOICE.bass[V.bass](t,hz(base,root)*(bp===2?2:bp===3?1.5:1),SPS*(sec.bass===3?7:1.7));
+    if(T.arp>.02&&(T.arp>.5||st%2===0)) VOICE.arp[V.arp](t,hz(base*rg.arp,root+S.ARPS[sec.arp][st]));
+    if(T.lead>.02&&barLead) for(const n of barLead) if(n[0]===st) VOICE.lead[V.lead](t,hz(base*rg.lead,n[1]+key),n[2]*SPS);
     if(T.bell>.02){
-      if(sec.bell&&(st===0||st===6||st===10)) bell(t,hz(440,root+(st===0?12:st===6?7:19)-12));
-      if(barEcho&&barLead&&T.lead<.02) for(const n of barLead) if(n[0]===st&&n[0]%4===0) bell(t,hz(440,n[1]+key));
+      if(sec.bell&&(st===0||st===6||st===10)) bell(t,hz(base*rg.bell,root+(st===0?12:st===6?7:19)-12));
+      if(barEcho&&barLead&&T.lead<.02) for(const n of barLead) if(n[0]===st&&n[0]%4===0) bell(t,hz(base*rg.bell,n[1]+key));
     }
+  }
+  /* switch song: fade out, change at the end of the fade, start the new song from its beginning, fade in */
+  function applySong(n){ S=n; SPS=60/n.bpm/4; step=0; barLead=null; barEcho=false; }
+  function setSong(id){
+    const n=SONGS[id]||SONGS.dojo;
+    if(pending&&n===S){ pending=null; if(xf) xf.gain.setTargetAtTime(1,ctx.currentTime,.12); return; }   // changed our mind during the fade
+    if(n===(pending||S)) return;
+    if(!ctx||!started){ applySong(n); return; }
+    pending=n; swapAt=ctx.currentTime+.9; xf.gain.setTargetAtTime(0,ctx.currentTime,.2);
   }
   function tick(){
     if(!ctx) return;
     if(ctx.state!=='running'){ nextT=ctx.currentTime+.1; return; }
+    if(pending&&ctx.currentTime>=swapAt){ applySong(pending); pending=null; xf.gain.setTargetAtTime(1,ctx.currentTime,.12); }
     if(nextT<ctx.currentTime-.2) nextT=ctx.currentTime+.05;
     while(nextT<ctx.currentTime+.4){ sched(step,nextT); nextT+=SPS; step++; }
   }
@@ -186,8 +274,8 @@ const Music=(()=>{
     noiseBuf=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate); const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
     const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-16; comp.ratio.value=4; comp.knee.value=12; comp.attack.value=.005; comp.release.value=.2;
     filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=18000;
-    duckG=ctx.createGain(); bus=ctx.createGain(); bus.gain.value=musicOn?.8:0;
-    bus.connect(duckG); duckG.connect(filt); filt.connect(comp); comp.connect(ctx.destination);
+    duckG=ctx.createGain(); bus=ctx.createGain(); bus.gain.value=musicOn?.8:0; xf=ctx.createGain();   // xf = the fade between songs
+    bus.connect(xf); xf.connect(duckG); duckG.connect(filt); filt.connect(comp); comp.connect(ctx.destination);
     for(const n in T){ const g=ctx.createGain(); g.gain.value=0; g.connect(bus); layers[n]=g; }
     nextT=ctx.currentTime+.15; startClock(); update();
   }
@@ -195,6 +283,7 @@ const Music=(()=>{
     if(!ctx||!bus) return;
     const st=G.state, m=st==='pause'?G.prevState:st, hp=G.bossHP, now=ctx.currentTime;
     const action=(m==='play'||m==='busy')&&document.body.classList.contains('playing');
+    setSong(document.body.classList.contains('playing')?placeSong():'dojo');   // in a run: the song of the place; menus: the dojo song
     for(const k in T) T[k]=0;
     if(action){ T.pad=.35; T.kick=T.taiko=T.snare=T.hat=T.bass=1; T.arp=.75; T.bell=.8; T.lead=(G.combo>=3||hp<=2)?1:0; H16=hp<=3; }
     else if(m==='chest'||m==='summary'){ T.pad=1; T.arp=.7; T.lead=1; T.bell=.6; H16=false; }
@@ -221,7 +310,7 @@ const Music=(()=>{
     if(kind==='wrong'){ duck(.35,350); osc('sine',90,t,.5,filt,.8,{f2:35}); nz(t,.25,filt,.3,{type:'lowpass',f:900,f2:150}); }
     else if(kind==='boss'){ duck(.5,500); nz(t,.9,filt,.35,{f:3000,f2:1200}); osc('sine',120,t,.6,filt,.9,{f2:38}); osc('triangle',65,t,.6,filt,.5); }
   }
-  return {start,update,duck,duckHold,release,stinger, level:()=>duckG?duckG.gain.value:1};
+  return {start,update,duck,duckHold,release,stinger,setSong, level:()=>duckG?duckG.gain.value:1};
 })();
 
 /* ---------------------------------------------------------------------
