@@ -27,9 +27,10 @@ and bringing missed words back (practice words).
   can be a lot for sensitive children. Add a "Calm effects" toggle next to Graphics (flash off or very soft, no
   freeze, less shake) and remember it in `localStorage`.
 - **Phones: test on a real device.** The layout was checked in an emulated 844 x 390 (iPhone held sideways) and 375 x 812 screen,
-  but not on a real iPhone: please check speech (first tap), sound with the silent switch on, "Add to Home Screen", and
-  how smooth it runs. Upright play ("Play like this anyway") works but is small; a real portrait layout (signs in a 2 x 2
-  grid) would be a bigger change.
+  but not on a real iPhone: please check speech (first tap), sound with the silent switch on, "Add to Home Screen", the
+  self-turning page when the phone is held upright, and how smooth it runs.
+- **Place pictures.** `images/places/*.jpg` are screenshots of the scenery. If a place changes, capture them again (render the place
+  with the heroes hidden and save the canvas), or the cards will show the old look.
 
 ## Game design details
 

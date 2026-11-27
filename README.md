@@ -9,11 +9,14 @@ image files; sounds, music and figures are generated in code.
 
 ## How to play
 
-1. **Title screen:** click or press ✕ to start.
-2. **Choose your hero:** use ◀ ▶ (or click a hero), then press **PLAY**.
-3. **Spell the word:** the game says the word and shows a picture and blank letter slots. Several signs
+1. **Title screen:** the four wardrobe pets (dragon, chick, ghost, robo drone) fly over the title. Click or press ✕ to start.
+2. **Choose your hero:** use ◀ ▶ (or click a hero; a ▼ marker bounces over the chosen one), then press **PLAY** under the hero card.
+   (The camera tips down a little on this screen, so the heroes stand above the card.)
+3. **Where to?** Pick a place from the picture cards (or the Adventure tour, or Surprise me), and how to play: **All my words**,
+   **Tricky words** (only the words that were hard) and the timer on or off. Then press **GO!**
+4. **Spell the word:** the game says the word and shows a picture and blank letter slots. Several signs
    show letters, and only one is right. Click the correct sign (or press keys 1-4, or the matching pad button).
-4. **Beat the boss:** after a set number of words (4 by default, shown as the boss's hearts) a boss appears. Spell correctly to
+5. **Beat the boss:** after a set number of words (4 by default, shown as the boss's hearts) a boss appears. Spell correctly to
    attack, and a finisher move plays at the end.
 5. **Report and treasure:** each level ends with a spelling report and a treasure chest with coins, stickers and prizes.
 
@@ -38,7 +41,7 @@ sound-alikes such as `c`/`k`/`s`), so the game also shows which sounds need prac
 
 ### Power-ups, missions and word twists
 
-- **⚡ Power meter** (top right): every right letter charges it. After 6 (`POWER_FILL`) you win a power-up (you can hold two;
+- **⚡ Power meter** (bottom left): every right letter charges it. After 6 (`POWER_FILL`) you win a power-up (you can hold two;
   with both slots full you get 5 coins instead). Use one with a click on its button, keys `5` / `6`, or L1 on the pad:
   - 🔍 **Magnifier** - two wrong signs disappear (the child still has to choose between the last two)
   - 🛡️ **Shield** - the next slip or timeout costs no life
@@ -66,8 +69,8 @@ fireworks and others).
 
 ### Places
 
-The hero select screen has a place chip under the heroes. Use its ◀ ▶ buttons (or the ▲ ▼ keys) to choose where
-the adventure happens. The choice is remembered. The default is the **Adventure tour**: every level moves to the
+After PLAY, the **Where to?** step shows a picture card for every place (`images/places/`, screenshots of the game's own scenery)
+plus the Adventure tour and Surprise me. The scene behind it changes as you pick, and the choice is remembered. The default is the **Adventure tour**: every level moves to the
 next place (school, forest, candy, snow, beach, then round again) and each place has its own boss.
 
 | Place | Look |
@@ -139,8 +142,8 @@ Words the child gets wrong are practised until they stick:
   lowers it. Tricky words get extra turns and tend to come early in the round, so they are not lost among many ticked words.
 - **🎯 marks** show tricky words in the word lists and on the spelling report; the Words screen lists all of them (🧽 Reset forgets them).
   When a tricky word is spelled perfectly it shows "✨ Fixed it!".
-- **🎯 Tricky words button** (hero select screen, next to PLAY; only shown when there are any): a practice run with only the tricky
-  words of all groups.
+- **🎯 Tricky words** (the "how do you want to play?" choice in the Where to? step; greyed out when there are none): a practice
+  run with only the tricky words of all groups.
 
 Scores of words that are in no group any more are forgotten.
 
@@ -149,7 +152,7 @@ Scores of words that are in no group any more are forgotten.
 | Input | Use |
 |---|---|
 | Mouse / touch | Click signs, heroes and buttons |
-| Keyboard | `1`-`4` choose a letter sign, `5` / `6` use a power-up, arrow keys move, `Enter` / `Space` confirm, `Esc` back, `▲` `▼` change place (hero select), `P` pause, `R` hear the word, `M` music, `T` timer, `G` graphics (Caps Lock does not matter) |
+| Keyboard | `1`-`4` choose a letter sign, `5` / `6` use a power-up, arrow keys move, `Enter` / `Space` confirm, `Esc` back, `▲` `▼` switch between places and how to play (Where to? step), `P` pause, `R` hear the word, `M` music, `T` timer, `G` graphics (Caps Lock does not matter) |
 | PS4 controller | ✕ ○ □ △ for the four signs, D-pad / stick to move, R1 hears the word, L1 uses a power-up, Options pauses |
 
 The game can be paused at almost any moment (`P`, `Esc`, Options, or the ⏸ button), and it pauses by itself when the
@@ -161,8 +164,11 @@ instead of getting stuck.
 
 The game works on phones and tablets (tested at iPhone 14 / 16 size, 844 x 390 sideways).
 
-- **Play it sideways.** Held upright, a phone shows "Turn your phone sideways to play!" (and the game pauses). "Play like
-  this anyway" keeps it upright: the camera then steps back so the whole scene still fits, just smaller.
+- **Always sideways.** On a phone held upright the game turns itself 90 degrees, so it is always shown in landscape: just
+  turn the phone to the left. This also works with the phone's rotation lock on. When the browser turns to landscape by
+  itself, the game is shown normally. (`layoutRotation()` / `ROT` in `js/engine.js`: the whole page is turned, taps are turned
+  back with `toLocal()`, and style.css uses `--vw` / `--vh`, 1% of the game frame, instead of `vw` / `vh`.)
+- **Never stretched.** After the phone turns, the drawing surface is re-fitted to the canvas (Safari reports the new size late).
 - **Full screen on iPhone:** in Safari tap Share, then **Add to Home Screen**. The icon opens the game full screen, without
   Safari's bars (`manifest.webmanifest`, `icons/`). iPhones cannot go full screen from a web page any other way; on Android and
   computers the menu bar has a **⛶ Full screen** button.
@@ -209,6 +215,7 @@ the browser's `localStorage` under the key `spellingHeroes_v1`.
 │   ├── game.js       game state, screens, wardrobe, word editor, game flow (levels, words, finishers, report, chest)
 │   └── main.js       start-up and the main loop
 ├── models/           Kenney hero GLBs, weapons, bosses (Monsters/, Pirates/, Imp; CC0 / kit licenses in models/)
+├── images/places/    picture cards of the places for the Where to? step (captured from the game; tour / random made from them)
 ├── icons/            home-screen icons (drawn by tools/make_icons.py), used by manifest.webmanifest
 ├── manifest.webmanifest  "Add to Home Screen" settings (full screen, sideways)
 ├── tools/            gltf2glb.py: packs a Quaternius .gltf (embedded buffer) into a compact .glb; make_icons.py: draws icons/
@@ -245,5 +252,5 @@ matters**: `settings` → `audio` → `engine` → `tween` → `fx` → `corrido
   pooled and redrawn. Smoothing in the main loop uses `lerpK(k, dt)` so animations run at the same speed at 60, 120 or 144 Hz.
 - **Sharpness:** `applyResScale()` in `js/corridor.js` renders above CSS resolution on hi-DPI screens (Retina, phones), up to a
   budget of 1.6 million pixels (`PIX_BUDGET`); the automatic quality check in `js/main.js` can bring it back down.
-- **Browser cache:** `index.html` loads the scripts and the stylesheet with `?v=5`. Raise that number when you publish
+- **Browser cache:** `index.html` loads the scripts and the stylesheet with `?v=9`. Raise that number when you publish
   changed files, so phones and browsers fetch the new version instead of a cached old one (or use a hard refresh, Ctrl+F5).

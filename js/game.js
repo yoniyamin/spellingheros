@@ -16,23 +16,23 @@ window.__game=G;
 const camT=V3(0,1.8,0);
 const run=fn=>fn().catch(recover);     // every game-flow chain goes through here, so any error ends up in recover() instead of freezing the game
 const show=(id,on)=>$(id).classList.toggle('show',on);
-const setScreens=name=>{ ['title','select','shop','locker','pause','reveal','words','summary'].forEach(s=>show(s,s===name)); };
+const setScreens=name=>{ ['title','select','venue','shop','locker','pause','reveal','words','summary'].forEach(s=>show(s,s===name)); };
 
 function refreshStats(){ $('coins').textContent=save.coins; $('stars').textContent=save.stars; $('lvl').textContent=G.level; }
 function addCoins(n){ save.coins+=n; refreshStats(); persist(); }
 function banner(small,big,ms=1900){ const b=$('banner'); b.querySelector('small').textContent=small; b.querySelector('b').textContent=big; b.classList.add('show'); return wait(ms).then(()=>b.classList.remove('show')); }
 function toScreen(v){
-  const w=engine.getRenderWidth(), h=engine.getRenderHeight(), r=canvas.getBoundingClientRect();
+  const w=engine.getRenderWidth(), h=engine.getRenderHeight();
   const p=BABYLON.Vector3.Project(v,BABYLON.Matrix.IdentityReadOnly,scene.getTransformMatrix(),camera.viewport.toGlobal(w,h));
-  return {x:r.left+p.x/w*r.width,y:r.top+p.y/h*r.height};
+  return {x:p.x/w*canvas.clientWidth,y:p.y/h*canvas.clientHeight};       // in the game frame (the canvas fills it; see ROT in engine.js)
 }
 function popText(txt,world,color){ const p=toScreen(world), e=document.createElement('div'); e.className='popt'; e.textContent=txt; e.style.left=p.x+'px'; e.style.top=p.y+'px';
   if(color) e.style.color=color; document.body.appendChild(e); setTimeout(()=>e.remove(),1050); }
 function flyEl(html,from,toEl,ms=700){
   return new Promise(res=>{ const e=document.createElement('div'); e.className='fly'; e.textContent=html; e.style.left=from.x+'px'; e.style.top=from.y+'px'; document.body.appendChild(e);
-    const r=toEl.getBoundingClientRect();
+    const c=rectCenter(toEl);
     requestAnimationFrame(()=>requestAnimationFrame(()=>{ const tr=`${ms}ms cubic-bezier(.3,.7,.4,1)`;
-      e.style.transition=`left ${tr},top ${tr},transform ${ms}ms,opacity ${ms}ms`; e.style.left=(r.left+r.width/2)+'px'; e.style.top=(r.top+r.height/2)+'px'; e.style.transform='translate(-50%,-50%) scale(.7)'; }));
+      e.style.transition=`left ${tr},top ${tr},transform ${ms}ms,opacity ${ms}ms`; e.style.left=c.x+'px'; e.style.top=c.y+'px'; e.style.transform='translate(-50%,-50%) scale(.7)'; }));
     setTimeout(()=>e.remove(),ms+30);
     wait(ms+30).then(res); });      // on the tween clock (not setTimeout), so resetting the game also stops whatever is waiting for this
 }
@@ -168,22 +168,67 @@ function layoutSelect(){
 }
 function enterSelect(){
   const home=placeForLevel(1); if(home&&PLACE.id!==home.id) setPlace(home.id);        // coming back from a run of other places: show the start place again
-  G.state='select'; document.body.classList.remove('playing'); setScreens('select'); layoutSelect(); G.camTarget=0; refreshStats(); updateMenuLabels(); renderPlace();
-  const tr=trickyWords().length, pb=$('practiceBtn'); pb.style.display=tr?'':'none'; pb.textContent=`🎯 Tricky words (${tr})`;
+  G.state='select'; document.body.classList.remove('playing'); setScreens('select'); layoutSelect(); G.camTarget=0; refreshStats(); updateMenuLabels();
 }
 
 /* ---------------- places (see places.js): chosen on the select screen, or a different one on every level ---------------- */
-function renderPlace(){
+/* ---------------- step 2 after PLAY: where and how (the "venue" screen) ----------------
+   Picture cards for the places (images/places/, captured from the game), the tour and "Surprise me"; below them how to play:
+   all ticked words or only the tricky ones, and the timer. Keys / pad: ◀ ▶ choose, ▲ ▼ switch between the two rows. */
+const PLACE_PIC=id=>`images/places/${id}.jpg`;
+let vRow=0, playMode='all', vKeys=false;            // vRow: 0 = places, 1 = how to play; vKeys: show the keyboard / pad focus (only after arrow keys were used)
+const VMODES=()=>{ const tr=trickyWords().length; return [
+  {id:'all',   icon:'⚔️', name:'All my words', sub:`${WORDS.length} word${WORDS.length===1?'':'s'} from your ticked groups`, off:!WORDS.length},
+  {id:'tricky',icon:'🎯', name:'Tricky words', sub:tr?`only the ${tr} word${tr===1?' that was':'s that were'} hard`:'none yet - well done!', off:!tr},
+  {id:'timer', icon:timerOn?'⏱️':'😌', name:timerOn?'Timer on':'No timer', sub:timerOn?'20 seconds for each letter':'take your time', toggle:true},
+]; };
+function openVenue(){
+  if(!WORDS.length&&!trickyWords().length){ toast('Tick a word group first! 📝'); openWords(); return; }
+  save.hero=G.heroIdx; persist();
+  if(playMode==='tricky'&&!trickyWords().length) playMode='all';
+  if(playMode==='all'&&!WORDS.length) playMode='tricky';
+  vRow=0; vKeys=false; G.state='venue'; setScreens('venue'); $('vHero').textContent=HEROES[G.heroIdx].name.split(' ')[0]; renderVenue(); SFX.swap();
+}
+function renderVenue(){
+  $('vPlaces').innerHTML=PLACE_CHOICES.map(c=>`<button class="vcard${c.id===save.place?' sel':''}${vKeys&&vRow===0&&c.id===save.place?' focus':''}" data-vplace="${esc(c.id)}" title="${esc(c.desc)}">`+
+    `<span class="vpic" style="background-image:url('${PLACE_PIC(c.id)}')"></span><b>${esc(c.icon)} ${esc(c.name)}</b></button>`).join('');
   const ch=PLACE_CHOICES.find(c=>c.id===save.place)||PLACE_CHOICES[0];
-  $('placeIcon').textContent=ch.icon; $('placeName').textContent=ch.name; $('placeDesc').textContent=ch.desc;
+  $('vPlaces').insertAdjacentHTML('beforeend',`<div class="vdesc">${esc(ch.icon)} <b>${esc(ch.name)}</b> - ${esc(ch.desc)}</div>`);
+  $('vModes').innerHTML=VMODES().map((m,i)=>`<button class="vmode${m.toggle?' tog':''}${!m.toggle&&m.id===playMode?' sel':''}${m.off?' off':''}${vKeys&&vRow===1&&i===vModeIdx()?' focus':''}" data-vmode="${m.id}">`+
+    `<span class="ic">${m.icon}</span><span><b>${esc(m.name)}</b><small>${esc(m.sub)}</small></span></button>`).join('');
 }
-function cyclePlace(dir){
-  const i=Math.max(0,PLACE_CHOICES.findIndex(c=>c.id===save.place)), ch=PLACE_CHOICES[(i+dir+PLACE_CHOICES.length)%PLACE_CHOICES.length];
-  save.place=ch.id; persist(); SFX.swap();
+let vFocusMode=0; const vModeIdx=()=>vFocusMode;
+function choosePlace(id){
+  if(!PLACE_CHOICES.some(c=>c.id===id)) return;
+  save.place=id; persist(); SFX.swap();
   const to=placeForLevel(1);
-  if(to&&to.id!==PLACE.id){ setPlace(to.id); flash('#ffffff',.35); }        // the scene behind the menu changes right away, so the child can see it
-  renderPlace();
+  if(to&&to.id!==PLACE.id){ setPlace(to.id); flash('#ffffff',.3); }        // the scene behind the menu changes right away
+  renderVenue();
 }
+function chooseMode(id){
+  const m=VMODES().find(x=>x.id===id); if(!m) return;
+  if(m.toggle){ toggleTimer(); renderVenue(); return; }
+  if(m.off){ SFX.wrong(); toast(id==='tricky'?'No tricky words yet - well done! 🌟':'Tick a word group first! 📝'); return; }
+  playMode=id; SFX.swap(); renderVenue();
+}
+function venueInput(a){
+  if(a==='B'){ enterSelect(); SFX.swap(); return; }
+  if(a==='A'){ if(playMode==='tricky'&&!trickyWords().length) playMode='all';
+    if(playMode==='all'&&!WORDS.length){ toast('Tick a word group first! 📝'); openWords(); return; }
+    run(()=>startRun(playMode==='tricky')); return; }
+  if(a==='up'||a==='down'||a==='left'||a==='right') vKeys=true;
+  if(a==='up'||a==='down'){ vRow=a==='down'?1:0; SFX.tick(); renderVenue(); return; }
+  if(a==='left'||a==='right'){ const d=a==='right'?1:-1;
+    if(vRow===0){ const i=Math.max(0,PLACE_CHOICES.findIndex(c=>c.id===save.place)); choosePlace(PLACE_CHOICES[(i+d+PLACE_CHOICES.length)%PLACE_CHOICES.length].id); }
+    else { const n=VMODES().length; vFocusMode=(vFocusMode+d+n)%n; const m=VMODES()[vFocusMode]; if(!m.toggle&&!m.off) playMode=m.id; SFX.tick(); renderVenue(); } return; }
+  if(a==='X'&&vRow===1){ const m=VMODES()[vFocusMode]; chooseMode(m.id); }      // □ on the "how" row: toggle the timer card
+}
+$('venue').addEventListener('click',e=>{
+  const t=e.target.closest('[data-vplace],[data-vmode]'); if(!t) return; vKeys=false;
+  if(t.dataset.vplace!==undefined){ vRow=0; choosePlace(t.dataset.vplace); }
+  else { vRow=1; vFocusMode=VMODES().findIndex(m=>m.id===t.dataset.vmode); chooseMode(t.dataset.vmode); }
+  t.blur();
+});
 /* at the start of every level: a fixed place stays; the tour moves to the next place; "Surprise me" to a random other one (the flash hides the swap) */
 function pickLevelPlace(){
   const next=placeForLevel(G.level)||rnd(PLACES.filter(p=>p.id!==PLACE.id));
@@ -213,7 +258,7 @@ function shopAct(){
   } else { save.equip[it.slot]=(save.equip[it.slot]===it.id)?null:it.id; SFX.swap(); }
   persist(); G.rigs.forEach(applyCosmetics); setAuraColor(); renderShop(); refreshStats();
 }
-function confettiDom(){ const r=$('shopAct').getBoundingClientRect(); for(let i=0;i<14;i++){ const e=document.createElement('div'); e.className='cdot';
+function confettiDom(){ const c=rectCenter($('shopAct')), r={left:c.x,top:c.y-20,width:0}; for(let i=0;i<14;i++){ const e=document.createElement('div'); e.className='cdot';
   e.textContent=rnd(['🎉','✨','⭐','💖','🪙']); e.style.left=(r.left+r.width/2)+'px'; e.style.top=r.top+'px';
   e.style.setProperty('--dx',(Math.random()*300-150)+'px'); e.style.setProperty('--dy',(-80-Math.random()*200)+'px'); document.body.appendChild(e); setTimeout(()=>e.remove(),1100); } }
 function renderLocker(){
@@ -335,14 +380,12 @@ function onInput(a){
     case 'title': SFX.ding(0); enterSelect(); break;
     case 'select':
       if(a==='left'||a==='right'){ G.heroIdx=(G.heroIdx+(a==='right'?1:-1)+HEROES.length)%HEROES.length; SFX.swap(); layoutSelect(); }
-      else if(a==='up'||a==='pleft') cyclePlace(-1);
-      else if(a==='down'||a==='pright') cyclePlace(1);
-      else if(a==='A'){ if(!WORDS.length){ toast('Tick a word group first! 📝'); openWords(); break; } save.hero=G.heroIdx; persist(); run(()=>startRun(false)); }
-      else if(a==='practice'){ if(!trickyWords().length){ toast('No tricky words yet - well done! 🌟'); break; } save.hero=G.heroIdx; persist(); run(()=>startRun(true)); }
+      else if(a==='A') openVenue();
       else if(a==='Y'){ G.state='shop'; shopIdx=0; setScreens('shop'); renderShop(); SFX.swap(); }
       else if(a==='X'){ G.state='locker'; setScreens('locker'); renderLocker(); SFX.swap(); }
       else if(a==='L1') openWords();
       break;
+    case 'venue': venueInput(a); break;
     case 'shop':
       if(a==='left') shopIdx=(shopIdx+SHOP.length-1)%SHOP.length; else if(a==='right') shopIdx=(shopIdx+1)%SHOP.length;
       else if(a==='up') shopIdx=(shopIdx+SHOP.length-SHOP_COLS)%SHOP.length; else if(a==='down') shopIdx=(shopIdx+SHOP_COLS)%SHOP.length;
@@ -376,10 +419,7 @@ document.addEventListener('visibilitychange',()=>{
   if(G.state==='play'||G.state==='busy'||G.state==='chest') pauseGame(true);
 });
 
-/* ---------------- phones: turn sideways, full screen ---------------- */
-$('rotateAnyway').addEventListener('click',()=>{ document.documentElement.classList.add('portrait-ok'); applyResScale(); });
-const rotateShown=()=>getComputedStyle($('rotate')).display!=='none';
-window.addEventListener('resize',()=>{ if(rotateShown()&&(G.state==='play'||G.state==='busy'||G.state==='chest')) pauseGame(true); });   // turned upright mid-game: wait
+/* ---------------- full screen (phones held upright are handled by turning the page, see ROT in engine.js) ---------------- */
 const canFull=!!(document.fullscreenEnabled||document.webkitFullscreenEnabled);       // (not on iPhone: there "Add to Home Screen" gives full screen)
 if(canFull) $('mbFull').style.display='';
 function toggleFullscreen(){

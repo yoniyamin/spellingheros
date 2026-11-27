@@ -6,7 +6,24 @@
    BABYLON SET-UP
    ===================================================================== */
 const canvas = $('c');
-const engine = new BABYLON.Engine(canvas,true,{stencil:true,preserveDrawingBuffer:false});
+/* ---------------- always sideways on phones ----------------
+   The scene is wide, so on a phone held upright the whole page (body) is turned 90 degrees and the game shows sideways
+   anyway: the child turns the phone (this works with the phone's rotation lock on, too). When the browser itself turns
+   to landscape, the page is not turned. Everything inside body is laid out in the turned "game frame"; toLocal() turns
+   screen points (taps, element rectangles) into that frame. --vw / --vh are 1% of the game frame (used by style.css instead of vw / vh). */
+const ROT={on:false,w:innerWidth,h:innerHeight};
+function layoutRotation(){
+  let touch=false; try{ touch=matchMedia('(pointer: coarse)').matches; }catch(e){}
+  const w=innerWidth, h=innerHeight, on=touch&&h>w&&w<600, de=document.documentElement, st=de.style;
+  ROT.on=on; ROT.w=on?h:w; ROT.h=on?w:h;
+  de.classList.toggle('rot',on); de.classList.toggle('compact',ROT.h<=500);
+  st.setProperty('--fw',ROT.w+'px'); st.setProperty('--fh',ROT.h+'px'); st.setProperty('--vw',ROT.w/100+'px'); st.setProperty('--vh',ROT.h/100+'px');
+}
+layoutRotation();
+/* a point on the screen (clientX / clientY, getBoundingClientRect) -> the same point in the game frame */
+const toLocal=(x,y)=>ROT.on?{x:y,y:innerWidth-x}:{x,y};
+const rectCenter=el=>{ const r=el.getBoundingClientRect(); return toLocal(r.left+r.width/2,r.top+r.height/2); };
+const engine =new BABYLON.Engine(canvas,true,{stencil:true,preserveDrawingBuffer:false});
 engine.setHardwareScalingLevel(1);   // the real level is set by applyResScale (corridor.js): sharper on hi-DPI screens, within a pixel budget
 const scene = new BABYLON.Scene(engine);
 /* Draw order. Group 0 is the backdrop: the floor, the sky, the scenery pieces and the ambient sparkles (fireflies, snow, dust). Everything else (the hero,

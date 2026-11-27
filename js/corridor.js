@@ -122,11 +122,18 @@ let petalRate=4, dustRate=14;   // particles per second at Balanced/High; the cu
    about 1.6 million pixels (an iPhone held sideways gets ~2x, a 1080p monitor stays at 1x). dynScale (auto quality, main.js)
    can then take it back down step by step, to below CSS resolution like before. */
 const PIX_BUDGET=1.6e6;
-function pixelRatio(){ const dpr=window.devicePixelRatio||1, css=Math.max(1,innerWidth*innerHeight); return Math.max(1,Math.min(dpr,2.5,Math.sqrt(PIX_BUDGET/css))); }
+function pixelRatio(){ const dpr=window.devicePixelRatio||1, css=Math.max(1,ROT.w*ROT.h); return Math.max(1,Math.min(dpr,2.5,Math.sqrt(PIX_BUDGET/css))); }
 const dynMax=()=>1.3*pixelRatio();
 function applyResScale(){ engine.setHardwareScalingLevel((QUAL==='low'?1.3:QUAL==='high'?1.15:1)*dynScale/pixelRatio()); fit(); }
 function setDynScale(v){ dynScale=Math.max(1,Math.min(dynMax(),v)); applyResScale(); }
-window.addEventListener('resize',()=>applyResScale());
+/* keep the drawing surface the same shape as the canvas on screen. iPhone Safari reports the new size a moment AFTER a
+   rotation, so a resize handled right away kept the old shape and the picture looked stretched: also watch the canvas itself
+   (ResizeObserver), re-check shortly after every resize, and main.js compares the shapes every half second as a last net. */
+function onViewport(){ layoutRotation(); applyResScale(); }
+window.addEventListener('resize',()=>{ onViewport(); setTimeout(onViewport,120); setTimeout(onViewport,450); });
+window.addEventListener('orientationchange',()=>{ setTimeout(onViewport,60); setTimeout(onViewport,400); });
+try{ if(window.visualViewport) visualViewport.addEventListener('resize',onViewport); }catch(e){}
+try{ new ResizeObserver(()=>applyResScale()).observe(canvas); }catch(e){}
 try{ matchMedia('(resolution: '+(window.devicePixelRatio||1)+'dppx)').addEventListener('change',()=>applyResScale()); }catch(e){}   // moved to another screen
 function setQuality(q,manual){
   QUAL=q; const low=q==='low', hi=q==='high'; dynScale=1;   // a quality change starts again at full sharpness for that level

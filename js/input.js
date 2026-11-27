@@ -59,14 +59,16 @@ function heroAt(x,y){
   return hit;
 }
 canvas.addEventListener('pointerdown',e=>{
-  if(G.state==='play'){ const i=dummyAt(e.clientX,e.clientY); if(i>=0) onInput(['A','B','X','Y'][i]); }
+  const q=toLocal(e.clientX,e.clientY);                // (the page may be turned sideways, see ROT in engine.js)
+  if(G.state==='play'){ const i=dummyAt(q.x,q.y); if(i>=0) onInput(['A','B','X','Y'][i]); }
   else if(G.state==='chest') onInput('A');
-  else if(G.state==='select'){ const i=heroAt(e.clientX,e.clientY);
+  else if(G.state==='select'){ const i=heroAt(q.x,q.y);
     if(i>=0){ if(i===G.heroIdx) onInput('A'); else { G.heroIdx=i; SFX.swap(); layoutSelect(); } } }
 });
 canvas.addEventListener('pointermove',e=>{
   let h=-1;
-  if(G.state==='play'&&!G.lock) h=dummyAt(e.clientX,e.clientY);
-  else if(G.state==='select') h=heroAt(e.clientX,e.clientY);
+  const q=toLocal(e.clientX,e.clientY);
+  if(G.state==='play'&&!G.lock) h=dummyAt(q.x,q.y);
+  else if(G.state==='select') h=heroAt(q.x,q.y);
   G.hover=G.state==='play'?h:-1; canvas.style.cursor=(h>=0||G.state==='chest')?'pointer':'';
 });

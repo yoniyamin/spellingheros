@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="css/style.css?v=5">
+<link rel="stylesheet" href="css/style.css?v=9">
 </head>
 <body>
 <canvas id="c" tabindex="0"></canvas>
@@ -37,11 +37,14 @@
 <div id="banner"><small></small><b></b></div>
 <div id="prompt" class="chip">Press <span class="b-x">✕</span> or click to open the chest!</div>
 <div id="pad" class="chip"></div>
+<div id="heroMark">▼</div>
 
 <div id="title" class="screen show">
-  <div class="deco">⚔️ 🐉 ⭐ 🔥 👑</div>
-  <h1>Spelling<br><span>Heroes</span></h1>
-  <div class="sub">Spell the word, beat the boss!</div>
+  <div class="ttop">
+    <div class="pets" aria-hidden="true"><i></i><i></i><i></i><i></i></div>   <!-- slots: the four 3D pets fly here (main.js) -->
+    <h1>Spelling <span>Heroes</span></h1>
+    <div class="sub">Spell the word, beat the boss!</div>
+  </div>
   <div class="press">Press <span class="b-x">✕</span> or click to start</div>
 </div>
 
@@ -56,19 +59,28 @@
     <button class="mb" data-act="fullscreen" id="mbFull" style="display:none">⛶ Full screen</button>
   </div>
   <div class="top">Choose your hero!</div>
+  <div class="selrow">
   <div class="chip herochip">
     <button class="arrow" data-act="left" title="previous hero">◀</button>
     <div class="hinfo"><div id="heroName"></div><div id="heroDesc"></div></div>
     <button class="arrow" data-act="right" title="next hero">▶</button>
   </div>
-  <div class="chip placechip">
-    <button class="arrow sm" data-act="pleft" title="previous place">◀</button>
-    <div class="pinfo"><div><span id="placeIcon"></span> <b id="placeName"></b></div><div id="placeDesc"></div></div>
-    <button class="arrow sm" data-act="pright" title="next place">▶</button>
+  <div class="btnrow playrow"><button class="btn lg go" data-act="A">▶ PLAY!</button></div>
   </div>
-  <div class="btnrow playrow"><button class="btn lg go" data-act="A">▶ PLAY!</button>
-    <button class="btn practice" data-act="practice" id="practiceBtn" title="Play only the words that were tricky before">🎯 Tricky words</button></div>
-  <div class="keys chip">◀ ▶ choose &nbsp;·&nbsp; ▲ ▼ place &nbsp;·&nbsp; <span class="b-x">✕</span> play &nbsp;·&nbsp; <span class="b-t">△</span> wardrobe &nbsp;·&nbsp; <span class="b-s">□</span> trophies &nbsp;·&nbsp; L1 words &nbsp;·&nbsp; or click the hero!</div>
+  <div class="keys chip">◀ ▶ choose a hero &nbsp;·&nbsp; <span class="b-x">✕</span> next &nbsp;·&nbsp; <span class="b-t">△</span> wardrobe &nbsp;·&nbsp; <span class="b-s">□</span> trophies &nbsp;·&nbsp; L1 words &nbsp;·&nbsp; or click a hero!</div>
+</div>
+
+<!-- step 2 after PLAY: where (a place, the tour or a surprise) and how (all words / tricky words, timer) -->
+<div id="venue" class="screen">
+  <div class="panel wide vpanel">
+    <h2>🗺️ Where to, <span id="vHero">hero</span>?</h2>
+    <div class="vlabel">Pick a place</div>
+    <div id="vPlaces" class="vgrid"></div>
+    <div class="vlabel">How do you want to play?</div>
+    <div id="vModes" class="vmodes"></div>
+    <div class="btnrow"><button class="btn" data-act="B">◀ Back</button><button class="btn lg go" data-act="A">▶ GO!</button></div>
+    <div class="keys">◀ ▶ choose &nbsp;·&nbsp; ▲ ▼ places / how to play &nbsp;·&nbsp; <span class="b-x">✕</span> go &nbsp;·&nbsp; <span class="b-o">○</span> back</div>
+  </div>
 </div>
 
 <div id="shop" class="screen">
@@ -148,9 +160,6 @@
   </div>
 </div>
 
-<!-- a phone held upright: the game is played sideways -->
-<div id="rotate"><div class="ph">📱</div><div class="msg">Turn your phone sideways to play!</div>
-  <button class="btn sm" id="rotateAnyway">Play like this anyway</button></div>
 
 <div id="loadErr" style="display:none;position:fixed;inset:0;z-index:100;background:#aab0ea;color:#2d2f6b;text-align:center;padding:12vh 24px;font:700 clamp(18px,3vw,32px)/1.5 'Comic Sans MS','Trebuchet MS',Arial,sans-serif">
   <div style="font-size:3em">😴</div>
@@ -170,18 +179,18 @@
   window.addEventListener('load',function(){ if(!window.__ready) window.__showLoadError(); });
 </script>
 <!-- load order matters: the files share one global scope -->
-<script src="js/settings.js?v=5"></script>
-<script src="js/audio.js?v=5"></script>
-<script src="js/engine.js?v=5"></script>
-<script src="js/tween.js?v=5"></script>
-<script src="js/fx.js?v=5"></script>
-<script src="js/finishers.js?v=5"></script>
-<script src="js/corridor.js?v=5"></script>
-<script src="js/places.js?v=5"></script>
-<script src="js/rig.js?v=5"></script>
-<script src="js/targets.js?v=5"></script>
-<script src="js/input.js?v=5"></script>
-<script src="js/game.js?v=5"></script>
-<script src="js/main.js?v=5"></script>
+<script src="js/settings.js?v=9"></script>
+<script src="js/audio.js?v=9"></script>
+<script src="js/engine.js?v=9"></script>
+<script src="js/tween.js?v=9"></script>
+<script src="js/fx.js?v=9"></script>
+<script src="js/finishers.js?v=9"></script>
+<script src="js/corridor.js?v=9"></script>
+<script src="js/places.js?v=9"></script>
+<script src="js/rig.js?v=9"></script>
+<script src="js/targets.js?v=9"></script>
+<script src="js/input.js?v=9"></script>
+<script src="js/game.js?v=9"></script>
+<script src="js/main.js?v=9"></script>
 </body>
 </html>
