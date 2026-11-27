@@ -79,7 +79,7 @@ function buildSegment(type){
   // party bunting along the top of every wall (merged into the wall mesh, so it costs nothing extra to draw)
   add(bx(4.02,.03,.03,dark,null,0,5.78,3.3));
   for(let k=0;k<5;k++){ const f=bx(.36,.36,.03,M(RAINBOW[(k+type*2)%RAINBOW.length][0],.5),null,-1.6+k*.8,5.55,3.29); f.rotation.z=PI/4; add(f); }
-  const merged=BABYLON.Mesh.MergeMeshes(parts,true,true,undefined,false,true);
+  const merged=mergeBaked(parts);          // ~20 colours -> a handful of draw calls (see mergeBaked in engine.js)
   merged.isVisible=false; merged.isPickable=false; return backdrop(merged);
 }
 const SEGS=[]; const SEGN=20;
@@ -118,8 +118,16 @@ const QNAME={balanced:'Balanced',high:'High',low:'Low'}; let pipeOn=!!pipe;
    own resolution) before it drops a whole quality level, and eases it back when there is headroom */
 let dynScale=1;
 let petalRate=4, dustRate=14;   // particles per second at Balanced/High; the current place sets these (places.js), Low uses half
-function applyResScale(){ engine.setHardwareScalingLevel((QUAL==='low'?1.3:QUAL==='high'?1.15:1)*dynScale); fit(); }
-function setDynScale(v){ dynScale=Math.max(1,Math.min(1.3,v)); applyResScale(); }
+/* sharpness: on Retina / phone screens (devicePixelRatio > 1) render with more pixels than CSS pixels, but within a budget of
+   about 1.6 million pixels (an iPhone held sideways gets ~2x, a 1080p monitor stays at 1x). dynScale (auto quality, main.js)
+   can then take it back down step by step, to below CSS resolution like before. */
+const PIX_BUDGET=1.6e6;
+function pixelRatio(){ const dpr=window.devicePixelRatio||1, css=Math.max(1,innerWidth*innerHeight); return Math.max(1,Math.min(dpr,2.5,Math.sqrt(PIX_BUDGET/css))); }
+const dynMax=()=>1.3*pixelRatio();
+function applyResScale(){ engine.setHardwareScalingLevel((QUAL==='low'?1.3:QUAL==='high'?1.15:1)*dynScale/pixelRatio()); fit(); }
+function setDynScale(v){ dynScale=Math.max(1,Math.min(dynMax(),v)); applyResScale(); }
+window.addEventListener('resize',()=>applyResScale());
+try{ matchMedia('(resolution: '+(window.devicePixelRatio||1)+'dppx)').addEventListener('change',()=>applyResScale()); }catch(e){}   // moved to another screen
 function setQuality(q,manual){
   QUAL=q; const low=q==='low', hi=q==='high'; dynScale=1;   // a quality change starts again at full sharpness for that level
   for(let i=outlinedMeshes.length-1;i>=0;i--){ const m=outlinedMeshes[i]; if(m.isDisposed()) outlinedMeshes.splice(i,1); else m.renderOutline=!low; }

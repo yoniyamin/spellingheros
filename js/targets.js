@@ -13,8 +13,17 @@ function drawSym(c,btn,cx,cy,r,color){
   else { c.moveTo(cx,cy-r); c.lineTo(cx+r*1.1,cy+r*.8); c.lineTo(cx-r*1.1,cy+r*.8); c.closePath(); }
   c.stroke();
 }
+/* the card textures are kept and redrawn (making a new texture + material for every sign, 4 per letter, caused small hitches) */
+const cardPool=[];
 function cardMat(letter,btn){
-  const t=new BABYLON.DynamicTexture('card',256,scene,true); const c=t.getContext(); c.clearRect(0,0,256,256);
+  let it=cardPool.find(x=>!x.busy);
+  if(!it){ const t=new BABYLON.DynamicTexture('card',256,scene,true); t.hasAlpha=true; t.anisotropicFilteringLevel=4;
+    const m=new BABYLON.StandardMaterial('cardM',scene); m.diffuseTexture=t; m.useAlphaFromDiffuseTexture=true; m.emissiveColor=BABYLON.Color3.White();
+    m.disableLighting=true; m.backFaceCulling=false; it={t,m,busy:false}; m._pool=it; cardPool.push(it); }
+  it.busy=true; drawCard(it.t,letter,btn); return it.m;
+}
+function drawCard(t,letter,btn){
+  const c=t.getContext(); c.clearRect(0,0,256,256);
   const col=BTN[btn].color;
   roundRect(c,10,10,236,236,34); c.fillStyle='#ffffff'; c.fill();
   const g=c.createLinearGradient(0,10,0,246); g.addColorStop(0,col+'10'); g.addColorStop(1,col+'66'); c.fillStyle=g; c.fill();
@@ -25,23 +34,37 @@ function cardMat(letter,btn){
   c.fillStyle='rgba(45,47,107,.22)'; c.fillText(letter,144,207);
   c.lineWidth=10; c.strokeStyle='#ffffff'; c.lineJoin='round'; c.strokeText(letter,138,200);
   c.fillStyle='#2d2f6b'; c.fillText(letter,138,200);
-  t.hasAlpha=true; t.update();
-  const m=new BABYLON.StandardMaterial('cardM',scene); m.diffuseTexture=t; m.useAlphaFromDiffuseTexture=true; m.emissiveColor=BABYLON.Color3.White();
-  m.disableLighting=true; m.backFaceCulling=false; return m;
+  t.update();
 }
+/* The training dummies under the signs are drawn as instances of a few shared meshes (body, face, arms, ring, glow, shadow),
+   so the four of them cost about a dozen draw calls instead of ~70. The ring and glow get their button colour per instance. */
+const DUMMY=(()=>{
+  const o=nd(null,0,0,0), wood=M('#a9a0d8'), dark=M('#6c72c4'), light=M('#e8eaff'), ink=M('#1c1d3a',0);
+  const keep=m=>{ m.isVisible=false; m.isPickable=false; keepNode(m); return m; };      // the shared meshes are never drawn themselves, only their instances
+  const body=keep(mergeBaked([cy(.8,1,.14,dark,o,0,.07,0), cy(.3,.34,1.05,wood,o,0,.64,0), sp(.64,light,o,0,1.55,0)]));
+  const face=keep(mergeBaked([sp(.09,ink,o,-.12,1.6,-.28), sp(.09,ink,o,.12,1.6,-.28), bx(.22,.04,.04,ink,o,0,1.42,-.3)]));
+  const arms=keep(mergeBaked([bx(1.3,.2,.2,wood,o,0,0,0)]));
+  const ring=keep(tor(.42,.1,M('#ffffff',.7),null,0,0,0)); ring.material=M('#ffffff',.7);
+  const glow=keep(BABYLON.MeshBuilder.CreateDisc('glow',{radius:1,tessellation:28},scene)); glow.material=GM('#ffffff',.28);
+  const shadow=keep(blob(null,.7));
+  [ring,glow].forEach(m=>m.registerInstancedBuffer('color',4));          // per-instance colour (multiplies the white material)
+  [body,arms,ring].forEach(m=>{ m.renderOutline=QUAL!=='low'; m.outlineWidth=.022; m.outlineColor=OUTC; outlinedMeshes.push(m); });
+  [body,arms].forEach(m=>reg(m));                     // shadow + floor reflection on High
+  o.dispose();
+  return {body,face,arms,ring,glow,shadow};
+})();
 function makeDummy(letter,btn){
-  const root=nd(null,0,0,0), wood=M('#a9a0d8'), dark=M('#6c72c4'), light=M('#e8eaff'), ink=M('#1c1d3a',0);
-  cy(.8,1,.14,dark,root,0,.07,0); cy(.3,.34,1.05,wood,root,0,.64,0); const arms=bx(1.3,.2,.2,wood,root,0,1.05,0);
-  const head=sp(.64,light,root,0,1.55,0); [-1,1].forEach(s=>sp(.09,ink,root,s*.12,1.6,-.28));
-  bx(.22,.04,.04,ink,root,0,1.42,-.3);
-  tor(.42,.1,M(BTN[btn].color,.7),root,0,.55,0);
+  const root=nd(null,0,0,0), col=BABYLON.Color3.FromHexString(BTN[btn].color);
+  const inst=(src,x,y,z)=>{ const i=src.createInstance('dm'); i.parent=root; i.position.set(x,y,z); i.isPickable=false; return i; };
+  inst(DUMMY.body,0,0,0); inst(DUMMY.face,0,0,0);
+  const arms=inst(DUMMY.arms,0,1.05,0);
+  const ring=inst(DUMMY.ring,0,.55,0); ring.instancedBuffers.color=new BABYLON.Color4(col.r,col.g,col.b,1);
+  const glow=inst(DUMMY.glow,0,.035,0); glow.rotation.x=PI/2; glow.instancedBuffers.color=new BABYLON.Color4(col.r,col.g,col.b,1);
+  inst(DUMMY.shadow,0,.025,0).rotation.x=PI/2;
   const card=pl(1.55,1.55,cardMat(letter,btn),root,0,3.05,0); card.billboardMode=BABYLON.Mesh.BILLBOARDMODE_ALL;
-  const glow=BABYLON.MeshBuilder.CreateDisc('glow',{radius:1,tessellation:28},scene); glow.rotation.x=PI/2; glow.position.y=.035;
-  glow.parent=root; glow.material=GM(BTN[btn].color,.28); glow.isPickable=false;
-  blob(root,.7); outlineNode(root,.022,card);
   return {root,card,letter,btn,arms,alive:true,hint:false,t:Math.random()*5};
 }
-function disposeDummy(d){ try{ d.card.material.dispose(true,true); }catch(e){} d.root.dispose(); }
+function disposeDummy(d){ try{ const p=d.card.material&&d.card.material._pool; if(p) p.busy=false; }catch(e){} d.card.material=null; d.root.dispose(); }
 
 /* =====================================================================
    BOSSES (all monochrome, glowing eyes)

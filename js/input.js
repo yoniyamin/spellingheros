@@ -17,24 +17,31 @@ function pollPad(){
   if(dir&&dir!==prevDir) onInput(dir); prevDir=dir;
 }
 /* on-screen help changes depending on whether a controller is plugged in */
+/* a phone or tablet (no mouse): the help talks about tapping */
+const TOUCH=(()=>{ try{ return matchMedia('(pointer: coarse)').matches&&!matchMedia('(pointer: fine)').matches; }catch(e){ return false; } })();
+if(TOUCH) document.documentElement.classList.add('touch');
+const IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 function updateHints(){
-  $('pad').textContent=padOn?'🎮 Controller ready!':'🖱️ No controller? Use your mouse (or keys 1-4)!';
-  $('hintbar').innerHTML=padOn
-    ?'Press the button on the sign: <span class="b-x">✕</span> <span class="b-o">○</span> <span class="b-s">□</span> <span class="b-t">△</span> &nbsp;·&nbsp; R1 = hear the word &nbsp;·&nbsp; Options = pause'
-    :'🖱️ Click the sign with the right letter! &nbsp;·&nbsp; 🔊 hear the word &nbsp;·&nbsp; keys 1-4 work too';
+  const iosTip=IOS&&!navigator.standalone?' · Tip: Share ⬆️ then "Add to Home Screen" to play full screen':'';
+  $('pad').textContent=padOn?'🎮 Controller ready!':TOUCH?'👆 Tap to play!'+iosTip:'🖱️ No controller? Use your mouse (or keys 1-4)!';
+  $('hintbar').innerHTML=!padOn&&TOUCH?'👆 Tap the sign with the right letter! &nbsp;·&nbsp; 🔊 hear the word':padOn
+    ?'Press the button on the sign: <span class="b-x">✕</span> <span class="b-o">○</span> <span class="b-s">□</span> <span class="b-t">△</span> &nbsp;·&nbsp; R1 = hear the word &nbsp;·&nbsp; L1 = power-up &nbsp;·&nbsp; Options = pause'
+    :'🖱️ Click the sign with the right letter! &nbsp;·&nbsp; 🔊 hear the word &nbsp;·&nbsp; keys 1-4 work too, 5 / 6 use a power-up';
 }
-const KEYMAP={'1':'A','2':'B','3':'X','4':'Y',ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',Enter:'ok',' ':'ok',
+const KEYMAP={'1':'A','2':'B','3':'X','4':'Y','5':'P1','6':'P2',ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',Enter:'ok',' ':'ok',
               Escape:'back',Backspace:'back',q:'L1',e:'R1',r:'R1',p:'start'};
 window.addEventListener('keydown',e=>{
   const tg=e.target;                                    // typing in the word list: let the keys type
   if(tg&&(tg.tagName==='INPUT'||tg.tagName==='TEXTAREA')){ if(e.key==='Escape') tg.blur(); return; }
+  unlockAudio();
   if(e.key==='m'||e.key==='M'){ toggleMusic(); return; }
   if(e.key==='g'||e.key==='G'){ cycleGfx(); return; }
   if(e.key==='t'||e.key==='T'){ toggleTimer(); return; }
   if(G.state==='title'){ e.preventDefault(); onInput('A'); return; }
-  const a=KEYMAP[e.key]; if(a){ e.preventDefault(); onInput(a); }
+  if(e.repeat&&(e.key==='p'||e.key==='P'||e.key==='Escape')) return;      // holding P / Esc must not flip pause on and off
+  const a=KEYMAP[e.key]||KEYMAP[e.key.length===1?e.key.toLowerCase():'']; if(a){ e.preventDefault(); onInput(a); }   // (Caps Lock: R, P, E, Q work too)
 });
-window.addEventListener('pointerdown',()=>{ audio(); if(G.state==='title') onInput('A'); });
+window.addEventListener('pointerdown',()=>{ unlockAudio(); if(G.state==='title') onInput('A'); });
 
 /* ---------------- mouse: click the 3D things (tested on screen, no mesh picking needed) ---------------- */
 function dummyAt(x,y){

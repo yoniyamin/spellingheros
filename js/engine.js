@@ -7,7 +7,7 @@
    ===================================================================== */
 const canvas = $('c');
 const engine = new BABYLON.Engine(canvas,true,{stencil:true,preserveDrawingBuffer:false});
-engine.setHardwareScalingLevel(1);   // never render above CSS resolution: hi-DPI screens would cost 4x the pixels
+engine.setHardwareScalingLevel(1);   // the real level is set by applyResScale (corridor.js): sharper on hi-DPI screens, within a pixel budget
 const scene = new BABYLON.Scene(engine);
 /* Draw order. Group 0 is the backdrop: the floor, the sky, the scenery pieces and the ambient sparkles (fireflies, snow, dust). Everything else (the hero,
    the letter signs, the boss, effects) is in group 1, which is drawn afterwards over a cleared depth buffer. So the backdrop can never cut through,
@@ -39,15 +39,19 @@ try{
   ip.contrast=1.12; ip.exposure=.92;
 }catch(e){ console.warn('post-processing unavailable',e); }
 
-const HALFW=9.6, DIST=12.2;
-let baseFov=.8, camPunch=0;
+const HALFW=9.6, DIST=12.2, CAMY=2.7, LOOKY=1.8, MAXFOV=1.15;
+let baseFov=.8, camPunch=0, camDist=DIST, camY=CAMY;
+/* the play area (hero, four signs, boss: about 19 units wide) always fits the screen. On wide screens the field of view
+   narrows; on narrow ones (a phone held upright, a tablet) it widens up to MAXFOV and then the camera steps back instead,
+   keeping the same downward angle. */
 function fit(){
   engine.resize();
-  const a=engine.getRenderWidth()/engine.getRenderHeight();
+  const a=engine.getRenderWidth()/Math.max(1,engine.getRenderHeight());
   const v=2*Math.atan(Math.tan(Math.atan2(HALFW,DIST))/a);
-  baseFov=Math.min(Math.max(v,.5),1.35); camera.fov=baseFov;
+  baseFov=Math.min(Math.max(v,.5),MAXFOV); camera.fov=baseFov;
+  const need=HALFW/(Math.tan(baseFov/2)*a);              // the distance at which HALFW fits with this field of view
+  camDist=Math.max(DIST,need); camY=LOOKY+(CAMY-LOOKY)*camDist/DIST;
 }
-window.addEventListener('resize',fit);
 
 /* ---------------- lighting FX: soft shadows, glossy floor ---------------- */
 /* quality levels: 'balanced' (default: blob shadows only), 'high' (real shadows + live floor reflection + bloom), 'low' (cheapest, lower resolution) */
@@ -87,6 +91,44 @@ const cy=(dt,db,h,m,par,x=0,y=0,z=0,t=24)=>fin(BABYLON.MeshBuilder.CreateCylinde
 const sp=(d,m,par,x=0,y=0,z=0,sx=1,sy=1,sz=1)=>{ const o=fin(BABYLON.MeshBuilder.CreateSphere('s',{diameter:d,segments:14},scene),m,par,x,y,z); o.scaling.set(sx,sy,sz); return o; };
 const pl=(w,h,m,par,x=0,y=0,z=0)=>fin(BABYLON.MeshBuilder.CreatePlane('p',{width:w,height:h},scene),m,par,x,y,z,false);
 const tor=(d,t,m,par,x=0,y=0,z=0)=>fin(BABYLON.MeshBuilder.CreateTorus('t',{diameter:d,thickness:t,tessellation:28},scene),m,par,x,y,z);
+/* ---------------- merging static pieces into few draw calls ----------------
+   MergeMeshes alone keeps one sub-mesh (= one draw call) per material, and a wall of the scenery uses ~20 colours.
+   mergeBaked() turns every plain colour material into a vertex colour first, so pieces that differ only in colour share
+   one material. Babylon's standard shader computes clamp(light + emissive) x vertex colour, which equals the original
+   colour x (light + glow) when the shared material is white with a grey glow, so the look stays the same (the glow amount
+   is rounded to steps of 0.05). Pieces with textures, transparency or no lighting are grouped by those properties instead.
+   The parts must be built around the origin (their world position is what gets merged); parent the result afterwards. */
+const bakedMats={};
+function bakedMat(lit,em,alpha,spec,pow,bfc){
+  const k=[lit?1:0,em,alpha,spec,pow,bfc?1:0].join('|'); if(bakedMats[k]) return bakedMats[k];
+  const m=new BABYLON.StandardMaterial('vc'+k,scene); m.diffuseColor=BABYLON.Color3.White(); m.backFaceCulling=bfc; m.alpha=alpha;
+  if(lit){ m.emissiveColor=new BABYLON.Color3(em,em,em); m.specularColor=BABYLON.Color3.FromHexString(spec); m.specularPower=pow; }
+  else { m.disableLighting=true; m.emissiveColor=BABYLON.Color3.White(); }
+  return bakedMats[k]=m;
+}
+function bakeColor(p){
+  const m=p.material, n=p.getTotalVertices(); let c=[1,1,1];
+  const plain=m&&m.getClassName&&m.getClassName()==='StandardMaterial'&&!m.diffuseTexture&&!m.emissiveTexture&&!m.opacityTexture&&!m.reflectionTexture&&!m.bumpTexture&&!m.ambientTexture;
+  if(plain){
+    const d=m.diffuseColor, e=m.emissiveColor;
+    if(m.disableLighting){ c=[e.r,e.g,e.b]; p.material=bakedMat(false,1,m.alpha,'',0,m.backFaceCulling); }
+    else { const mx=Math.max(d.r,d.g,d.b), em=mx>0?Math.round(Math.max(e.r,e.g,e.b)/mx*20)/20:0; c=[d.r,d.g,d.b];
+      p.material=bakedMat(true,em,m.alpha,m.specularColor.toHexString(),m.specularPower,m.backFaceCulling); }
+  }
+  const col=new Float32Array(n*4); for(let i=0;i<n;i++){ col[i*4]=c[0]; col[i*4+1]=c[1]; col[i*4+2]=c[2]; col[i*4+3]=1; }
+  p.setVerticesData(BABYLON.VertexBuffer.ColorKind,col,false);
+}
+function mergeBaked(parts){
+  parts.forEach(bakeColor);
+  const merged=BABYLON.Mesh.MergeMeshes(parts,true,true,undefined,false,true);
+  if(merged){ merged.hasVertexAlpha=false; merged.isPickable=false; }
+  return merged;
+}
+/* merge every mesh under a node that was built around the origin into one mesh (the node is disposed) */
+function bakeNode(n){ n.computeWorldMatrix(true); const parts=n.getChildMeshes(false); parts.forEach(m=>m.computeWorldMatrix(true)); const m=mergeBaked(parts); n.dispose(); reg(m); return m; }
+/* frame-rate independent smoothing: "move k of the way per 60 Hz frame", correct at 120 / 144 Hz too */
+const lerpK=(k,dt)=>1-Math.pow(1-k,dt/16.667);
+
 const shadowMat=(()=>{ const m=new BABYLON.StandardMaterial('shadow',scene); m.disableLighting=true; m.diffuseColor=BABYLON.Color3.Black();
   m.emissiveColor=BABYLON.Color3.FromHexString('#2c3086'); m.alpha=.16; return m; })();
 function blob(par,r){ const s=BABYLON.MeshBuilder.CreateDisc('sh',{radius:r,tessellation:28},scene); s.rotation.x=PI/2; s.position.y=.025;

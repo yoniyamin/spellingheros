@@ -36,6 +36,23 @@ image files; sounds, music and figures are generated in code.
 Wrong letters are chosen to be the ones children really mix up (for example `b`/`d`, vowels with vowels,
 sound-alikes such as `c`/`k`/`s`), so the game also shows which sounds need practice.
 
+### Power-ups, missions and word twists
+
+- **⚡ Power meter** (top right): every right letter charges it. After 6 (`POWER_FILL`) you win a power-up (you can hold two;
+  with both slots full you get 5 coins instead). Use one with a click on its button, keys `5` / `6`, or L1 on the pad:
+  - 🔍 **Magnifier** - two wrong signs disappear (the child still has to choose between the last two)
+  - 🛡️ **Shield** - the next slip or timeout costs no life
+  - 💚 **Extra life** - one life back (it waits if your lives are full)
+- **⚡ Quick letters:** a right letter picked on the first try within 4 seconds (`QUICK_TIME`) gives a bonus coin.
+- **🎯 Mission** (top left, under the lives): every level has one small goal, for example "spell 3 words with no slips",
+  "reach a x5 combo", "pick 6 letters fast", "beat the boss without losing a life" or "spell a tricky word perfectly".
+  Done = +25 coins and a star.
+- **Word twists** (a tag under the word box, see `TWIST` in `js/settings.js`):
+  - ⭐ **Golden word** - double coins
+  - 👀 **Look, cover, spell** (from level 2) - the whole word is shown for a moment, then hidden
+  - 🙈 **Mystery word** (from level 3, only words met before) - no picture, just listen (+5 coins)
+- **😡 Last heart:** when the boss is down to its last heart it gets angry (the boss box shakes) and the last word is the mega finisher.
+
 ### Heroes
 
 | Hero | Description |
@@ -100,26 +117,59 @@ in depth so they stay behind the letter signs without going behind the scenery.
     and tap a picture. **✨ Auto** goes back to the automatic pick; or
   - type or paste any emoji into the picture box.
   - A chosen picture applies when adding a single word. When several words are added at once, each uses its automatic pick.
-- **Word packs** replace the list with a ready-made set (Starter, Animals, Colors, ai / oa, Sight words, Numbers, Food).
+- **Word groups:** the words are kept in groups. There are ready-made packs (Starter, igh, Animals, Colors, ai / oa, Sight words,
+  Numbers, Food) and your own groups (it starts with "My words"; **➕ New group** makes another one, for example one per week's
+  spelling list). **Tick ✅ any number of groups** and the game plays all their words together (a word that is in two groups is played once).
+  Click a group's name to see its words; your own groups can be renamed, deleted and have words added or removed. A pack cannot be
+  changed, but **📋 Copy to my groups** makes an editable copy.
 - **Words per boss** sets how many words make a level (2 to 10). The default is 4; a value you chose earlier stays saved in the browser.
-- Click a word to hear it, ✖ to remove it. The list is saved in the browser.
-- **Practice words:** a word spelled with mistakes comes back about 3 words later in the same game, and words
-  the child keeps getting wrong appear more often in later games (a 🎯 marks them in this list). A word spelled
-  perfectly slowly loses its 🎯 again. The score is kept per word in the browser (`weak` in the save data) and is
-  forgotten when the word is removed from the list.
+- Click a word to hear it, ✖ to remove it. Everything is saved in the browser (`groups` and `active` in the save data).
+
+### Tricky words (reinforcement)
+
+Words the child gets wrong are practised until they stick:
+
+- **Right after a slip:** when the word is finished, it is spelled out letter by letter on the sticker, with the letters that went
+  wrong in red, and the voice says it the same way ("pig. P, I, G. pig").
+- **Again soon:** a word with mistakes comes back about 3 words later in the same game (twice at most).
+- **As "look, cover, spell":** a tricky word (and a word coming back after a slip) is first shown whole for a moment, then hidden.
+- **The hard letters are always blank:** the game remembers which letters of a word were missed (`hist` in the save data), and those
+  letters are always ones to spell next time, even on the easy first levels. Spelling one right fades the mark again.
+- **More often, and earlier:** every word has a practice score (`weak` in the save data, 0-5). Mistakes raise it, a perfect spelling
+  lowers it. Tricky words get extra turns and tend to come early in the round, so they are not lost among many ticked words.
+- **🎯 marks** show tricky words in the word lists and on the spelling report; the Words screen lists all of them (🧽 Reset forgets them).
+  When a tricky word is spelled perfectly it shows "✨ Fixed it!".
+- **🎯 Tricky words button** (hero select screen, next to PLAY; only shown when there are any): a practice run with only the tricky
+  words of all groups.
+
+Scores of words that are in no group any more are forgotten.
 
 ## Controls
 
 | Input | Use |
 |---|---|
 | Mouse / touch | Click signs, heroes and buttons |
-| Keyboard | `1`-`4` choose a letter sign, arrow keys move, `Enter` / `Space` confirm, `Esc` back, `▲` `▼` change place (hero select), `P` pause, `R` hear the word, `M` music, `T` timer, `G` graphics |
-| PS4 controller | ✕ ○ □ △ for the four signs, D-pad / stick to move, R1 hears the word, Options pauses |
+| Keyboard | `1`-`4` choose a letter sign, `5` / `6` use a power-up, arrow keys move, `Enter` / `Space` confirm, `Esc` back, `▲` `▼` change place (hero select), `P` pause, `R` hear the word, `M` music, `T` timer, `G` graphics (Caps Lock does not matter) |
+| PS4 controller | ✕ ○ □ △ for the four signs, D-pad / stick to move, R1 hears the word, L1 uses a power-up, Options pauses |
 
 The game can be paused at almost any moment (`P`, `Esc`, Options, or the ⏸ button), and it pauses by itself when the
 browser tab is hidden. "Back to hero select" in the pause menu resets the game in place (no page reload). If something
 unexpected goes wrong during play, the game retries the current word, and returns to hero select if that keeps failing,
 instead of getting stuck.
+
+## Phones and tablets
+
+The game works on phones and tablets (tested at iPhone 14 / 16 size, 844 x 390 sideways).
+
+- **Play it sideways.** Held upright, a phone shows "Turn your phone sideways to play!" (and the game pauses). "Play like
+  this anyway" keeps it upright: the camera then steps back so the whole scene still fits, just smaller.
+- **Full screen on iPhone:** in Safari tap Share, then **Add to Home Screen**. The icon opens the game full screen, without
+  Safari's bars (`manifest.webmanifest`, `icons/`). iPhones cannot go full screen from a web page any other way; on Android and
+  computers the menu bar has a **⛶ Full screen** button.
+- **Sound:** on an iPhone the game plays even with the silent switch on (the words have to be heard), and the first tap
+  switches on speech (iOS only lets a tap start it).
+- The HUD gets compact on short screens, stays clear of the notch / Dynamic Island and the home bar (safe areas), and long
+  words get narrower letter boxes. Tap hints replace the keyboard help.
 
 ## Running it
 
@@ -159,7 +209,9 @@ the browser's `localStorage` under the key `spellingHeroes_v1`.
 │   ├── game.js       game state, screens, wardrobe, word editor, game flow (levels, words, finishers, report, chest)
 │   └── main.js       start-up and the main loop
 ├── models/           Kenney hero GLBs, weapons, bosses (Monsters/, Pirates/, Imp; CC0 / kit licenses in models/)
-├── tools/            gltf2glb.py: packs a Quaternius .gltf (embedded buffer) into a compact .glb
+├── icons/            home-screen icons (drawn by tools/make_icons.py), used by manifest.webmanifest
+├── manifest.webmanifest  "Add to Home Screen" settings (full screen, sideways)
+├── tools/            gltf2glb.py: packs a Quaternius .gltf (embedded buffer) into a compact .glb; make_icons.py: draws icons/
 └── Backup/           older snapshots (not part of the game; ignored by git)
 ```
 
@@ -176,9 +228,22 @@ matters**: `settings` → `audio` → `engine` → `tween` → `fx` → `corrido
   cylinder and torus detail (`LOD_S`, `LOD_C`, `LOD_T`). Nodes that must survive `sweepScene()` in `js/game.js` are registered with `keepNode`.
 - **Draw order:** the backdrop (floor, sky, scenery pieces, ambient sparkles) is in rendering group 0; everything else (hero, signs, bosses, effects) is in
   group 1 and is drawn on top. A new floor / sky / scenery mesh or ambient particle system must be wrapped in `backdrop(...)` (see `js/engine.js`), or it will be drawn over the characters.
-- **Default words and packs:** `DEFAULT_WORDS` and `WORD_PACKS` in `js/settings.js`; automatic picture guesses are in `EMOJI_DICT`; picker pictures are in `EMOJI_CATS`.
+- **Default words and packs:** `DEFAULT_WORDS` and `WORD_PACKS` in `js/settings.js` (give a new pack a unique `id`: ticked groups are saved by it); automatic picture guesses are in `EMOJI_DICT`; picker pictures are in `EMOJI_CATS`.
 - **Wrong-letter behaviour:** `CONFUSABLE` in `js/settings.js`.
-- **Challenge numbers:** `LIVES_PER_BOSS`, `LETTER_TIME` and `BLANK_SHARE` in `js/settings.js`.
+- **Challenge numbers:** `LIVES_PER_BOSS`, `LETTER_TIME`, `BLANK_SHARE`, `POWER_FILL`, `QUICK_TIME` and `TWIST` in `js/settings.js`; the missions are `MISSIONS` in `js/game.js`.
+- **Music:** `SONGS` in `js/audio.js`. A song is plain data (tempo, key, steps per bar, patterns, phrases, form, instruments, mix,
+  reverb). Every place has its own song: school "School Bell March", forest "Moonlit Mushroom Sneak" (swung, music box),
+  candy "Sugar Rush Bounce" (toy piano, claps), snow "Snowflake Waltz" (3/4, glockenspiel, sleigh bells), beach "Pirate Jig"
+  (6/8, accordion, mandolin); menus play the "dojo" song. `SONG_OF_PLACE` links places to songs. Music and sound effects share a
+  generated reverb, and the effects go through their own compressor so many at once never clip.
 - **Title look:** `#title` rules in `css/style.css`. The "Heroes" word uses a rainbow gradient, so its shadow is a
   `drop-shadow` filter on the heading rather than a `text-shadow`, which would show through the gradient.
-- Browsers cache the CSS and JS aggressively; use a hard refresh (Ctrl+F5) after editing.
+- **Performance:** keep the number of draw calls low (about 140 during play; check with `BABYLON.SceneInstrumentation`
+  and its `drawCallsCounter`). Scenery made of many small pieces goes through `mergeBaked()` / `bakeNode()` in `js/engine.js`:
+  it turns flat colours into vertex colours, so a whole wall or a hero accessory with many colours is one or a few draw calls.
+  The training dummies under the signs are instances of shared meshes (`DUMMY` in `js/targets.js`) and the sign textures are
+  pooled and redrawn. Smoothing in the main loop uses `lerpK(k, dt)` so animations run at the same speed at 60, 120 or 144 Hz.
+- **Sharpness:** `applyResScale()` in `js/corridor.js` renders above CSS resolution on hi-DPI screens (Retina, phones), up to a
+  budget of 1.6 million pixels (`PIX_BUDGET`); the automatic quality check in `js/main.js` can bring it back down.
+- **Browser cache:** `index.html` loads the scripts and the stylesheet with `?v=5`. Raise that number when you publish
+  changed files, so phones and browsers fetch the new version instead of a cached old one (or use a hard refresh, Ctrl+F5).

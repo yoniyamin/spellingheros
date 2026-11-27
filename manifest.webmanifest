@@ -1,0 +1,16 @@
+{
+  "name": "Spelling Heroes",
+  "short_name": "Spelling Heroes",
+  "description": "Spell the word, beat the boss! A 3D spelling game for young children.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#aab0ea",
+  "theme_color": "#aab0ea",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

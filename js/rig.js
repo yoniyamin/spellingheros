@@ -172,8 +172,8 @@ function poseTo(rig,p,ms,ease){
 async function seq(rig,frames,onHit){ rig.busy=true; for(const f of frames){ await poseTo(rig,f.p||{},f.ms,f.ease); if(f.hit&&onHit) onHit(f.hit); } rig.busy=false; }
 function updateRig(rig,dt){
   rig.t+=dt/1000; const t=rig.t, j=rig.j;
-  const sw=(n,x,y,z,k=.28)=>{ const r=n.rotation; r.x+=(x-r.x)*k; r.y+=(y-r.y)*k; r.z+=(z-r.z)*k; };
-  if(rig.glb&&rig.glb.ready) updateGlb(rig);       // .glb hero: built-in clips for idle / run / cheer, the pose system for the funny moves
+  const K=lerpK(.28,dt), sw=(n,x,y,z)=>{ const r=n.rotation; r.x+=(x-r.x)*K; r.y+=(y-r.y)*K; r.z+=(z-r.z)*K; };   // (same speed at 60, 120 or 144 Hz)
+  if(rig.glb&&rig.glb.ready) updateGlb(rig,dt);       // .glb hero: built-in clips for idle / run / cheer, the pose system for the funny moves
   else if(!rig.busy){
     if(rig.cheer){
       sw(j.armR,-2.9+Math.sin(t*12)*.35,0,.3); sw(j.armL,-2.9+Math.sin(t*12+1)*.35,0,-.3);
@@ -269,7 +269,7 @@ async function upgradeRigToGlb(rig){
    so the numbers are close to the ones in buildNinja / buildPrincess. */
 async function glbNinjaExtras(rig,g){
   const tail=M('#7a0d15'), hood=M('#b81822'), fold=M('#d42a35');
-  const face=nd(rig.hold.head,0,0,0);
+  const face=nd(null,0,0,0);           // built around the origin, merged into one mesh (26 pieces, 1 draw call), then hung on the head
   // rounded rectangle prism: two boxes plus four corner cylinders (a custom mesh would draw badly with the outline pass)
   const rr=(w,d,h,r,mat,y)=>{ const n=nd(face,0,y,0); bx(w-2*r,h,d,mat,n); bx(w,h,d-2*r,mat,n);
     [-1,1].forEach(sx=>[-1,1].forEach(sz=>cy(2*r,2*r,h,mat,n,sx*(w/2-r),0,sz*(d/2-r),20))); };
@@ -277,15 +277,16 @@ async function glbNinjaExtras(rig,g){
   [.1,.145].forEach(y=>rr(.595,.575,.016,.145,fold,y));                                 // cloth folds
   rr(.6,.58,.026,.145,fold,.203);                                                       // folded top edge, just under the eyes
   [-1,1].forEach(s=>bx(.07,.09,.5,hood,face,s*.2075,.255,0));                           // hood sides framing the eye window
+  bakeNode(face).parent=rig.hold.head;
   rig.tails=[]; for(let i=0;i<2;i++){ const t=nd(rig.hold.head,0,.4,-.3); t.rotation.y=(i?1:-1)*.25; bx(.1,.06,.55,tail,t,0,0,-.27); rig.tails.push(t); }   // headband ends
   await glbAttach(null,'weapon-sword',g.bones.upper,{p:[.05,.02,-.2],r:[0,0,-.7],s:1});     // katana across the back
 }
 function glbPrincessExtras(rig,g){
   const gold=M('#ffd23f',.6), pink=M('#ff6fa8'), rim=M('#ffe0f0',.6);
   const skirt=g.mk(g.bones.upper,-.1,1);                       // follows the torso; world-size units
-  cy(1.02,1.55,.42,pink,skirt,0,-.02,0); cy(1.55,1.59,.08,rim,skirt,0,-.2,0); bx(1.04,.09,.66,gold,skirt,0,.2,0);
-  const crown=nd(rig.hold.head,0,.62,0); cy(.6,.6,.08,gold,crown); [-.17,0,.17].forEach(x=>cy(0,.14,.16,gold,crown,x,.1,.2));
-  const cape=nd(rig.hold.back,0,.95,-.3); bx(1.05,.72,.06,M('#7b4fd6'),cape,0,-.36,0); bx(1.15,.1,.1,gold,cape,0,0,.02); rig.cape=cape;   // short, so the wide skirt does not hide it
+  const sk=nd(null); cy(1.02,1.55,.42,pink,sk,0,-.02,0); cy(1.55,1.59,.08,rim,sk,0,-.2,0); bx(1.04,.09,.66,gold,sk,0,.2,0); bakeNode(sk).parent=skirt;
+  const crown=nd(rig.hold.head,0,.62,0), cr=nd(null); cy(.6,.6,.08,gold,cr); [-.17,0,.17].forEach(x=>cy(0,.14,.16,gold,cr,x,.1,.2)); bakeNode(cr).parent=crown;
+  const cape=nd(rig.hold.back,0,.95,-.3), cp=nd(null); bx(1.05,.72,.06,M('#7b4fd6'),cp,0,-.36,0); bx(1.15,.1,.1,gold,cp,0,0,.02); bakeNode(cp).parent=cape; rig.cape=cape;   // short, so the wide skirt does not hide it
   outlineNode(skirt); outlineNode(crown); outlineNode(cape);
 }
 
@@ -307,19 +308,19 @@ function glbPlay(rig,key){
   glbBase(g,a&&new Set(a.targetedAnimations.map(t=>t.target.uniqueId+'.'+t.animation.targetProperty)));   // joints this clip animates keep their value, so it can blend
   if(a) a.start(true,key==='move'?1.15:1);
 }
-function updateGlb(rig){
+function updateGlb(rig,dt=16.667){
   const g=rig.glb, j=rig.j;
   if(rig.busy){
     if(!g.wasBusy){ g.wasBusy=true; g.blend=0; g.cur=null; for(const n in g.groups) if(g.groups[n].isStarted) g.groups[n].stop();
       for(const k in g.bones) g.snap[k]=g.bones[k].rotationQuaternion.clone();
       glbBase(g,new Set(Object.values(g.bones).map(b=>b.uniqueId+'.rotationQuaternion'))); }   // everything except the 6 driven joints back to bind pose
-    g.blend=Math.min(1,g.blend+engine.getDeltaTime()/150);
+    g.blend=Math.min(1,g.blend+dt/150);
     for(const k in g.bones){ const r=j[k].rotation, d=BABYLON.Quaternion.RotationYawPitchRoll(r.y*GLB_AXES[1],r.x*GLB_AXES[0],r.z*GLB_AXES[2]);
       g.bones[k].rotationQuaternion=BABYLON.Quaternion.Slerp(g.snap[k],d.multiply(g.rest[k]),g.blend); }
   } else {
     g.wasBusy=false;
     glbPlay(rig,rig.cheer?'cheer':rig.moving?'move':'idle');
-    j.body.position.y=rig.cheer?Math.abs(Math.sin(rig.t*7))*.3:j.body.position.y*.7;
+    j.body.position.y=rig.cheer?Math.abs(Math.sin(rig.t*7))*.3:j.body.position.y*(1-lerpK(.3,dt));
   }
 }
 

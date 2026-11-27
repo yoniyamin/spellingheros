@@ -8,7 +8,9 @@
 const G={state:'title',heroIdx:save.hero||0,rigs:[],rig:null,x0:0,level:1,pool:[],cur:null,idx:0,wordMistakes:0,wrongRow:0,
          combo:0,bossHP:5,boss:null,dummies:[],lock:true,chest:null,prevState:'play',camX:0,shake:0,t:0,
          results:[],rec:null,hover:-1,sumDone:null,wordDone:false,again:{},
-         lives:LIVES_PER_BOSS,blanks:[],timeLeft:null};     // blanks: the letter positions to spell in this word; timeLeft: seconds left for this letter (null = not running)
+         lives:LIVES_PER_BOSS,blanks:[],timeLeft:null,     // blanks: the letter positions to spell in this word; timeLeft: seconds left for this letter (null = not running)
+         practice:false,practiceList:[],power:0,items:[],shield:false,mission:null,lastMission:null,think:0,livesLost:0,
+         wmode:null,peek:false};   // practice: a run of only the tricky words; power/items: power meter and power-ups held; think: seconds spent on this letter; wmode: the twist of this word (gold / flash / mystery)
 let timerOn=true; try{ timerOn=localStorage.getItem('sh_timer')!=='off'; }catch(e){}
 window.__game=G;
 const camT=V3(0,1.8,0);
@@ -36,35 +38,109 @@ function flyEl(html,from,toEl,ms=700){
 }
 /* slots: given (already filled in, grey) · filled (spelled, green) · cur (the one to spell now) · todo (still to come, faded) */
 function renderWord(){
-  const w=G.cur.w; $('emoji').textContent=G.cur.e;
+  const w=G.cur.w; $('emoji').textContent=G.wmode==='mystery'&&!G.wordDone?'❓':G.cur.e;
+  $('blanks').style.setProperty('--n',w.length);                // long words get narrower slots (style.css)
+  $('wordbox').classList.toggle('gold',G.wmode==='gold');
   $('blanks').innerHTML=[...w].map((ch,i)=>{
+    if(G.peek) return `<div class="slot peek" id="slot${i}">${ch}</div>`;          // "look": the whole word is shown for a moment
     const given=!G.blanks.includes(i), cls=given?'given':i<G.idx?'filled':i===G.idx?'cur':'todo';
-    return `<div class="slot ${cls}" id="slot${i}">${given||i<G.idx?ch:''}</div>`; }).join('');
+    return `<div class="slot ${cls}${i===G.justFilled?' just':''}" id="slot${i}">${given||i<G.idx?ch:''}</div>`; }).join('');
+  G.justFilled=-1;
 }
+function setTag(txt,cls){ const t=$('wtag'); t.textContent=txt||''; t.className=txt?'show '+(cls||''):''; }
 /* which letters of a word the child has to spell on this level (see BLANK_SHARE in settings.js); vowels are blanked first */
 function pickBlanks(w){
   const all=[...w].map((_,i)=>i), share=BLANK_SHARE[G.level-1];
   if(!share) return all;
-  const n=Math.max(1,Math.min(all.length,Math.round(all.length*share)));
+  const h=save.hist[w], missed=h&&h.pos?Object.keys(h.pos).map(Number).filter(i=>i<w.length&&h.pos[i]>0).sort((a,b)=>h.pos[b]-h.pos[a]):[];
+  const n=Math.max(1,Math.min(all.length,Math.max(Math.round(all.length*share),missed.length)));
   const vow=shuffle(all.filter(i=>VOWELS.includes(w[i]))), con=shuffle(all.filter(i=>!VOWELS.includes(w[i])));
-  return vow.concat(con).slice(0,n).sort((a,b)=>a-b);
+  return [...new Set(missed.concat(vow,con))].slice(0,n).sort((a,b)=>a-b);      // the letters you slipped on before come first, then vowels
 }
-function renderHearts(){ $('hearts').textContent='❤️'.repeat(Math.max(0,G.bossHP))+'🖤'.repeat(Math.max(0,WORDS_PER_LEVEL-G.bossHP)); }
-function renderLives(){ $('livesbox').textContent='💚'.repeat(Math.max(0,G.lives))+'🖤'.repeat(Math.max(0,LIVES_PER_BOSS-G.lives)); }
+function renderHearts(hit){
+  $('hearts').innerHTML='❤️'.repeat(Math.max(0,G.bossHP))+(hit&&G.bossHP<WORDS_PER_LEVEL?'<i class="lost">💔</i>'+'🖤'.repeat(Math.max(0,WORDS_PER_LEVEL-G.bossHP-1)):'🖤'.repeat(Math.max(0,WORDS_PER_LEVEL-G.bossHP)));
+  if(hit){ const b=$('bossbox'); b.classList.remove('hit'); void b.offsetWidth; b.classList.add('hit'); }
+}
+function renderLives(){ $('livesbox').textContent=(G.shield?'🛡️':'')+'💚'.repeat(Math.max(0,G.lives))+'🖤'.repeat(Math.max(0,LIVES_PER_BOSS-G.lives)); $('livesbox').classList.toggle('shielded',G.shield); }
 function loseLife(){
-  G.lives=Math.max(0,G.lives-1); renderLives();
   const b=$('livesbox'); b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
+  if(G.shield){ G.shield=false; renderLives(); SFX.shield(); if(G.rig) popText('🛡️ Blocked!',G.rig.root.position.add(V3(0,3.4,0)),'#6ba3ff'); return; }   // the shield takes the hit
+  G.lives=Math.max(0,G.lives-1); G.livesLost++; renderLives();
+  if(G.mission&&G.mission.id==='nolife'&&!G.mission.done){ G.mission.failed=true; renderMission(); }
+}
+
+/* ---------------- power meter + power-ups ---------------- */
+function renderPower(){
+  $('pmeter').innerHTML=Array.from({length:POWER_FILL},(_,i)=>`<i class="${i<G.power?'on':''}"></i>`).join('')+'<b>⚡</b>';
+  $('pitems').innerHTML=G.items.map((k,i)=>`<button class="pw" data-act="P${i+1}" title="${esc(POWERUPS[k].name)}: ${esc(POWERUPS[k].desc)} (key ${i+5})">${POWERUPS[k].icon}<small>${i+5}</small></button>`).join('')
+    ||'<span class="pw-none">power-ups</span>';
+}
+function chargePower(){
+  if(++G.power<POWER_FILL){ renderPower(); return; }
+  G.power=0;
+  if(G.items.length>=2){ addCoins(5); popText('⚡ +5 🪙',G.rig.root.position.add(V3(0,3.8,0)),'#ffe066'); renderPower(); return; }   // hands full: coins instead
+  const pool=['lens','lens','shield','shield'].concat(G.lives<LIVES_PER_BOSS?['heart','heart','heart']:['heart']), k=rnd(pool), P=POWERUPS[k];
+  G.items.push(k); renderPower(); SFX.powerup();
+  const b=$('powerbox'); b.classList.remove('gain'); void b.offsetWidth; b.classList.add('gain');
+  toast(`${P.icon} You won a ${P.name}! Click it (or press ${G.items.length+4}) - ${P.desc}`);
+}
+function usePower(slot){
+  if(G.state!=='play'||G.lock) return; const k=G.items[slot]; if(!k) return;
+  if(k==='heart'&&G.lives>=LIVES_PER_BOSS){ toast('Your lives are full - keep it for later 💚'); return; }
+  if(k==='shield'&&G.shield){ toast('Your shield is already on 🛡️'); return; }
+  const wrongs=G.dummies.filter(d=>d.alive&&d.letter!==G.cur.w[G.idx]);
+  if(k==='lens'&&wrongs.length<2){ toast('Only one wrong sign left - you can do it! 🔍'); return; }
+  G.items.splice(slot,1); renderPower(); SFX.powerup(true);
+  if(k==='lens'){
+    callout('🔍 MAGNIFIER!','#9fe8ff');
+    shuffle(wrongs).slice(0,2).forEach(d=>{ d.alive=false; const p=d.root.position.add(V3(0,2.4,0));
+      burst(p,{tex:'dot',count:16,power:4,size:.6,c1:[.7,.9,1],c2:[1,1,1],life:.7,grav:-.5}); SFX.pop();
+      tween(320,k=>d.root.scaling.setAll(Math.max(.001,1-k)),E.in).then(()=>disposeDummy(d)); });
+  } else if(k==='shield'){ G.shield=true; renderLives(); callout('🛡️ SHIELD ON!','#6ba3ff'); ringFx(G.rig.root.position.clone(),'#6ba3ff'); }
+  else { G.lives++; renderLives(); callout('💚 EXTRA LIFE!','#2fbf80'); popText('+1 💚',G.rig.root.position.add(V3(0,3.4,0)),'#2fbf80'); }
+}
+
+/* ---------------- missions: one small goal per level, for a bonus ---------------- */
+const MISSIONS=[
+  {id:'perfect', goal:()=>Math.min(3,WORDS_PER_LEVEL), text:n=>`Spell ${n} words with no slips`},
+  {id:'combo',   goal:()=>5,                            text:()=>'Reach a 🔥 x5 combo'},
+  {id:'quick',   goal:()=>6,                            text:n=>`Pick ${n} letters fast ⚡`},
+  {id:'nolife',  goal:()=>1,                            text:()=>'Beat the boss without losing a 💚'},
+  {id:'tricky',  goal:()=>Math.min(2,playList().filter(o=>weakOf(o.w)>=1).length), text:n=>`Spell ${n} 🎯 tricky word${n>1?'s':''} perfectly`},
+];
+function pickMission(){
+  const ok=MISSIONS.filter(m=>m.id!==G.lastMission&&m.goal()>0&&(m.id!=='combo'||WORDS_PER_LEVEL>=2));
+  const m=rnd(ok); G.lastMission=m.id; G.mission={id:m.id,goal:m.goal(),prog:0,done:false,failed:false,text:m.text(m.goal())}; renderMission();
+}
+function renderMission(){
+  const m=G.mission, el=$('mission'); if(!m){ el.style.display='none'; return; } el.style.display='';
+  el.className='chip'+(m.done?' done':m.failed?' failed':'');
+  el.innerHTML=`🎯 ${esc(m.text)} <b>${m.done?'✅':m.failed?'❌':m.id==='nolife'?'':`${Math.min(m.prog,m.goal)}/${m.goal}`}</b>`;
+}
+function missionEvent(kind,val){
+  const m=G.mission; if(!m||m.done||m.failed) return;
+  if(kind==='perfect'&&m.id==='perfect') m.prog++;
+  else if(kind==='combo'&&m.id==='combo') m.prog=Math.max(m.prog,val);
+  else if(kind==='quick'&&m.id==='quick') m.prog++;
+  else if(kind==='tricky'&&m.id==='tricky') m.prog++;
+  else if(kind==='boss'&&m.id==='nolife') m.prog=1;
+  else return;
+  if(m.prog>=m.goal){ m.done=true; addCoins(25); save.stars++; persist(); refreshStats(); SFX.mission(); callout('🎯 MISSION COMPLETE! +25 🪙','#ffe066');
+    const el=$('mission'); el.classList.remove('gain'); void el.offsetWidth; el.classList.add('gain'); }
+  renderMission();
 }
 /* ---- letter timer ---- */
 function updateTimerBar(){
   const t=$('timer'), on=timerOn&&G.timeLeft!=null; t.classList.toggle('on',on); if(!on) return;
-  const f=Math.max(0,G.timeLeft/LETTER_TIME); t.firstElementChild.style.width=(f*100)+'%';
+  const f=Math.max(0,G.timeLeft/LETTER_TIME); t.firstElementChild.style.transform=`scaleX(${f.toFixed(4)})`;   // (a transform, not a width: no page layout every frame)
   t.classList.toggle('warn',G.timeLeft<=10&&G.timeLeft>5); t.classList.toggle('low',G.timeLeft<=5);
 }
-function startTimer(){ G.timeLeft=LETTER_TIME; updateTimerBar(); }
+function startTimer(){ G.timeLeft=LETTER_TIME; G.think=0; updateTimerBar(); }
 function stopTimer(){ G.timeLeft=null; updateTimerBar(); }
 function tickLetterTimer(dt){          // called from the main loop (it does not run while paused)
-  if(!timerOn||G.timeLeft==null||G.state!=='play'||G.lock) return;
+  if(G.state!=='play'||G.lock) return;
+  G.think+=dt/1000;                    // how long this letter is taking (counts with the timer switched off too)
+  if(!timerOn||G.timeLeft==null) return;
   const before=Math.ceil(G.timeLeft); G.timeLeft-=dt/1000; updateTimerBar();
   if(G.timeLeft<=5&&Math.ceil(G.timeLeft)<before&&G.timeLeft>0) SFX.tick();       // a tick every second in the last 5 seconds
   if(G.timeLeft<=0){ G.lock=true; G.timeLeft=null; updateTimerBar(); run(timeUp); }
@@ -93,6 +169,7 @@ function layoutSelect(){
 function enterSelect(){
   const home=placeForLevel(1); if(home&&PLACE.id!==home.id) setPlace(home.id);        // coming back from a run of other places: show the start place again
   G.state='select'; document.body.classList.remove('playing'); setScreens('select'); layoutSelect(); G.camTarget=0; refreshStats(); updateMenuLabels(); renderPlace();
+  const tr=trickyWords().length, pb=$('practiceBtn'); pb.style.display=tr?'':'none'; pb.textContent=`🎯 Tricky words (${tr})`;
 }
 
 /* ---------------- places (see places.js): chosen on the select screen, or a different one on every level ---------------- */
@@ -140,13 +217,14 @@ function confettiDom(){ const r=$('shopAct').getBoundingClientRect(); for(let i=
   e.textContent=rnd(['🎉','✨','⭐','💖','🪙']); e.style.left=(r.left+r.width/2)+'px'; e.style.top=r.top+'px';
   e.style.setProperty('--dx',(Math.random()*300-150)+'px'); e.style.setProperty('--dy',(-80-Math.random()*200)+'px'); document.body.appendChild(e); setTimeout(()=>e.remove(),1100); } }
 function renderLocker(){
-  const got=WORDS.filter(w=>save.stickers[w.w]).length; $('lockerCount').textContent=`(${got}/${WORDS.length})`;
-  $('lockerGrid').innerHTML=WORDS.map(w=>{ const s=save.stickers[w.w];
+  const seen=new Set(), list=[]; WORDS.concat(...allGroups().map(g=>g.words.filter(o=>save.stickers[o.w]))).forEach(o=>{ if(!seen.has(o.w)){ seen.add(o.w); list.push(o); } });   // the words you play now, then any other word you have a sticker for
+  const got=list.filter(w=>save.stickers[w.w]).length; $('lockerCount').textContent=`(${got}/${list.length})`;
+  $('lockerGrid').innerHTML=list.map(w=>{ const s=save.stickers[w.w];
     return s?`<div class="item"><div class="ic">${esc(w.e)}</div>${esc(w.w)}<br>${'⭐'.repeat(s)}${'☆'.repeat(3-s)}</div>`:`<div class="item lock"><div class="ic">❓</div>???<br>☆☆☆</div>`; }).join('');
 }
 
 /* ---------------- word list editor (menu bar -> 📝 Words) ---------------- */
-function openWords(){ G.state='words'; setScreens('words'); renderWords(); togglePicker(false); SFX.swap(); }
+function openWords(){ G.state='words'; setScreens('words'); gSel=null; renderWords(); togglePicker(false); SFX.swap(); }
 /* "More..." picture picker: a category grid that fills the picture box (Auto clears it again) */
 let pkCat=0;
 function renderPicker(){
@@ -158,31 +236,68 @@ function togglePicker(open){
   const p=$('picker'), show=open===undefined?!p.classList.contains('show'):open;
   p.classList.toggle('show',show); if(show) renderPicker();
 }
+/* the group shown below the group list (its words can be heard, and changed if it is one of your own groups) */
+let gSel=null;
+const selGroup=()=>groupById(gSel)||groupById(save.active[0])||allGroups()[0];
 function saveWords(){
-  save.words=WORDS.map(o=>({w:o.w,e:o.e})); save.perLevel=WORDS_PER_LEVEL;
-  Object.keys(save.weak).forEach(k=>{ if(!WORDS.some(o=>o.w===k)) delete save.weak[k]; });     // forget practice scores of removed words
+  save.perLevel=WORDS_PER_LEVEL; rebuildWords();
+  Object.keys(save.weak).forEach(k=>{ if(!inAnyGroup(k)) delete save.weak[k]; });     // forget practice scores of words that are in no group any more
+  Object.keys(save.hist).forEach(k=>{ if(!inAnyGroup(k)) delete save.hist[k]; });
   persist(); G.pool=[];
 }
+/* every tricky word (practice score 1+) of every group, trickiest first */
+const trickyWords=()=>{ const seen=new Set(), out=[]; allGroups().forEach(g=>g.words.forEach(o=>{ if(weakOf(o.w)>=1&&!seen.has(o.w)){ seen.add(o.w); out.push({w:o.w,e:o.e}); } })); return out.sort((a,b)=>weakOf(b.w)-weakOf(a.w)); };
 function renderWords(){
-  $('wList').innerHTML=WORDS.length?WORDS.map((w,i)=>`<span class="wchip"><span class="say" data-say="${i}" title="hear it${weakOf(w.w)>=2?' - needs practice, it will come back more often':''}">${weakOf(w.w)>=2?'🎯 ':''}${esc(w.e)} ${esc(w.w)}</span><button class="x" data-del="${i}" title="remove">✖</button></span>`).join('')
-    :'<i>No words yet - type some above!</i>';
-  $('wCount').textContent=WORDS.length; $('perN').textContent=WORDS_PER_LEVEL;
-  if(!$('packs').children.length) $('packs').innerHTML=WORD_PACKS.map((p,i)=>`<button class="btn sm" data-pack="${i}">${esc(p.name)}</button>`).join('');
+  const sg=selGroup(); gSel=sg&&sg.id;
+  const weakN=g=>g.words.filter(o=>weakOf(o.w)>=1).length;
+  $('gList').innerHTML=allGroups().map(g=>{ const on=isActive(g.id), k=weakN(g);
+    return `<div class="gchip${on?' on':''}${g.id===gSel?' sel':''}${g.pack?' pack':''}"><button class="tick" data-gtog="${esc(g.id)}" title="${on?'playing - click to leave it out':'click to play this group'}">${on?'✅':'⬜'}</button>`+
+      `<button class="gname" data-gsel="${esc(g.id)}">${esc(g.icon)} ${esc(g.name)} <small>${g.words.length}${k?` · 🎯${k}`:''}</small></button></div>`; }).join('')+
+    `<button class="btn sm" data-wact="newg" title="Make a new group of your own words (for example this week's spelling list)">➕ New group</button>`;
+  const n=save.active.length;
+  $('playing').innerHTML=WORDS.length?`▶ Playing <b>${WORDS.length}</b> word${WORDS.length===1?'':'s'} from <b>${n}</b> group${n===1?'':'s'}`:'<i>No words to play yet - tick a group, or add your own words</i>';
+  if(sg){
+    const on=isActive(sg.id);
+    $('gHead').innerHTML=`<b>${esc(sg.icon)} ${esc(sg.name)}</b> <span class="gl-sub">${sg.pack?'ready-made pack':'your own group'}</span>`+
+      `<button class="btn sm ${on?'':'go'}" data-gtog="${esc(sg.id)}">${on?'⬜ Leave it out':'✅ Play this group'}</button>`+
+      (sg.pack?`<button class="btn sm" data-wact="copyg" title="Make your own copy of this pack, so you can change its words">📋 Copy to my groups</button>`
+        :`<button class="btn sm" data-wact="reng">✏️ Rename</button><button class="btn sm warn" data-wact="delg">🗑 Delete group</button>`);
+    $('wAdd').style.display=sg.pack?'none':''; if(sg.pack) togglePicker(false);
+    $('wList').innerHTML=sg.words.length?sg.words.map((w,i)=>`<span class="wchip${weakOf(w.w)>=1?' weak':''}"><span class="say" data-say="${i}" title="hear it${weakOf(w.w)>=1?' - tricky word, it comes back more often':''}">${weakOf(w.w)>=1?'🎯 ':''}${esc(w.e)} ${esc(w.w)}</span>${sg.pack?'':`<button class="x" data-del="${i}" title="remove">✖</button>`}</span>`).join('')
+      :'<i>No words in this group yet - type some above!</i>';
+  }
+  const tr=trickyWords();
+  $('tricky').innerHTML=tr.length?`<span class="lbl">🎯 Tricky words:</span> ${tr.slice(0,12).map(o=>`<span class="tw" data-sayw="${esc(o.w)}">${esc(o.e)} ${esc(o.w)}</span>`).join(' ')}${tr.length>12?' …':''} <button class="btn sm" data-wact="untricky" title="Forget which words were tricky">🧽 Reset</button>`:'';
+  $('perN').textContent=WORDS_PER_LEVEL;
 }
 const cleanWord=s=>s.toLowerCase().replace(/[^a-z]/g,'').slice(0,14);
 function addWords(){
+  const sg=selGroup(); if(!sg||sg.pack) return;
   const parts=$('wIn').value.split(/[\s,;]+/).map(cleanWord).filter(Boolean), myE=$('eIn').value.trim().slice(0,8);
   let added=0;
-  parts.forEach(w=>{ if(WORDS.some(o=>o.w===w)) return; WORDS.push({w,e:(parts.length===1&&myE)||EMOJI_DICT[w]||'✏️'}); added++; });
-  if(!added){ SFX.wrong(); toast(parts.length?'Those words are already on the list':'Type a word first ✏️'); return; }
+  parts.forEach(w=>{ if(sg.words.some(o=>o.w===w)) return; sg.words.push({w,e:(parts.length===1&&myE)||EMOJI_DICT[w]||'✏️'}); added++; });
+  if(!added){ SFX.wrong(); toast(parts.length?'Those words are already in this group':'Type a word first ✏️'); return; }
+  if(!isActive(sg.id)) save.active.push(sg.id);           // adding words to a group means you want to play it
   $('wIn').value=''; $('eIn').value=''; $('eIn').placeholder='🙂'; togglePicker(false); saveWords(); renderWords(); SFX.pop(); toast(`Added ${added} word${added>1?'s':''}! ✅`);
   if(parts.length===1) sayWord(parts[0]);
 }
+let gNum=0; const newGroupId=()=>{ let id; do{ id='g'+(Date.now()%1e7)+(gNum++); }while(groupById(id)); return id; };
+function makeGroup(name,words){
+  const icons=['📒','📗','📘','📙','📕','📓'], g={id:newGroupId(),name:(name||'').trim().slice(0,24)||'Group '+(save.groups.length+1),icon:icons[save.groups.length%icons.length],words:words||[]};
+  save.groups.push(g); save.active.push(g.id); gSel=g.id; saveWords(); renderWords(); SFX.buy(); return g;
+}
+function toggleGroup(id){
+  if(isActive(id)) save.active=save.active.filter(x=>x!==id); else save.active.push(id);
+  saveWords(); renderWords(); SFX.swap();
+}
 function wordsClick(e){
-  const t=e.target.closest('[data-del],[data-say],[data-pack],[data-wact],[data-emo],[data-cat]'); if(!t) return;
-  if(t.dataset.del!==undefined){ WORDS.splice(+t.dataset.del,1); saveWords(); renderWords(); SFX.tick(); }
-  else if(t.dataset.say!==undefined){ const w=WORDS[+t.dataset.say]; if(w) sayWord(w.w); }
-  else if(t.dataset.pack!==undefined){ const p=WORD_PACKS[+t.dataset.pack]; WORDS.length=0; p.words.forEach(o=>WORDS.push({...o})); saveWords(); renderWords(); SFX.buy(); toast('Loaded '+p.name); }
+  const t=e.target.closest('[data-del],[data-say],[data-sayw],[data-gtog],[data-gsel],[data-wact],[data-emo],[data-cat]'); if(!t) return;
+  const sg=selGroup();
+  if(t.dataset.del!==undefined){ if(sg&&!sg.pack){ sg.words.splice(+t.dataset.del,1); saveWords(); renderWords(); SFX.tick(); } }
+  else if(t.dataset.say!==undefined){ const w=sg&&sg.words[+t.dataset.say]; if(w) sayWord(w.w); }
+  else if(t.dataset.sayw!==undefined) sayWord(t.dataset.sayw);
+  else if(t.dataset.gtog!==undefined) toggleGroup(t.dataset.gtog);
+  else if(t.dataset.gsel!==undefined){ gSel=t.dataset.gsel; renderWords(); SFX.tick(); }
   else if(t.dataset.emo!==undefined){ $('eIn').value=t.dataset.emo; togglePicker(false); SFX.pop(); }
   else if(t.dataset.cat!==undefined){ pkCat=+t.dataset.cat; renderPicker(); SFX.tick(); }
   else { const a=t.dataset.wact;
@@ -190,7 +305,12 @@ function wordsClick(e){
     else if(a==='more'){ togglePicker(); SFX.swap(); }
     else if(a==='auto'){ $('eIn').value=''; togglePicker(false); SFX.swap(); toast('Auto picture ✨'); }
     else if(a==='per-'||a==='per+'){ WORDS_PER_LEVEL=Math.max(2,Math.min(10,WORDS_PER_LEVEL+(a==='per+'?1:-1))); saveWords(); renderWords(); SFX.swap(); }
-    else if(a==='clear'){ if(confirm('Remove all the words from the list?')){ WORDS.length=0; saveWords(); renderWords(); } } }
+    else if(a==='newg'){ const nm=prompt('Name of the new group (for example "Week 3"):','Group '+(save.groups.length+1)); if(nm!==null){ makeGroup(nm); toast('New group - type its words above ✏️'); setTimeout(()=>$('wIn').focus(),50); } }
+    else if(a==='copyg'&&sg){ makeGroup(sg.name+' (mine)',sg.words.map(o=>({...o}))); toast('Copied - now you can change its words'); }
+    else if(a==='reng'&&sg&&!sg.pack){ const nm=prompt('New name for this group:',sg.name); if(nm&&nm.trim()){ sg.name=nm.trim().slice(0,24); saveWords(); renderWords(); } }
+    else if(a==='delg'&&sg&&!sg.pack){ if(confirm(`Delete the group "${sg.name}" and its ${sg.words.length} word${sg.words.length===1?'':'s'}?`)){
+        save.groups=save.groups.filter(g=>g!==sg); save.active=save.active.filter(id=>id!==sg.id); gSel=null; saveWords(); renderWords(); SFX.tick(); } }
+    else if(a==='untricky'){ if(confirm('Forget which words were tricky? (they will come back as often as the others)')){ save.weak={}; save.hist={}; saveWords(); renderWords(); } } }
   t.blur();
 }
 $('words').addEventListener('click',wordsClick);
@@ -201,7 +321,7 @@ $('wIn').addEventListener('input',()=>{ const w=cleanWord($('wIn').value); $('eI
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]'); if(!b) return; e.preventDefault(); b.blur(); audio();
   const a=b.dataset.act;
-  if(a==='music') toggleMusic(); else if(a==='timer') toggleTimer(); else if(a==='gfx') cycleGfx(); else if(a==='words'){ if(G.state==='select') openWords(); } else onInput(a);
+  if(a==='fullscreen') toggleFullscreen(); else if(a==='music') toggleMusic(); else if(a==='timer') toggleTimer(); else if(a==='gfx') cycleGfx(); else if(a==='words'){ if(G.state==='select') openWords(); } else onInput(a);
 });
 $('shopGrid').addEventListener('click',e=>{ const it=e.target.closest('[data-i]'); if(!it) return; const i=+it.dataset.i;
   if(i===shopIdx) shopAct(); else { shopIdx=i; SFX.swap(); renderShop(); } });
@@ -217,7 +337,8 @@ function onInput(a){
       if(a==='left'||a==='right'){ G.heroIdx=(G.heroIdx+(a==='right'?1:-1)+HEROES.length)%HEROES.length; SFX.swap(); layoutSelect(); }
       else if(a==='up'||a==='pleft') cyclePlace(-1);
       else if(a==='down'||a==='pright') cyclePlace(1);
-      else if(a==='A'){ if(!WORDS.length){ toast('Add some words first! 📝'); openWords(); break; } save.hero=G.heroIdx; persist(); run(startRun); }
+      else if(a==='A'){ if(!WORDS.length){ toast('Tick a word group first! 📝'); openWords(); break; } save.hero=G.heroIdx; persist(); run(()=>startRun(false)); }
+      else if(a==='practice'){ if(!trickyWords().length){ toast('No tricky words yet - well done! 🌟'); break; } save.hero=G.heroIdx; persist(); run(()=>startRun(true)); }
       else if(a==='Y'){ G.state='shop'; shopIdx=0; setScreens('shop'); renderShop(); SFX.swap(); }
       else if(a==='X'){ G.state='locker'; setScreens('locker'); renderLocker(); SFX.swap(); }
       else if(a==='L1') openWords();
@@ -231,7 +352,9 @@ function onInput(a){
     case 'words': if(a==='B'||a==='start'){ enterSelect(); } break;
     case 'play':
       if(a==='A'||a==='B'||a==='X'||a==='Y') run(()=>pick({A:0,B:1,X:2,Y:3}[a]));
-      else if(a==='L1'||a==='R1'){ if(G.cur) sayWord(G.cur.w); }
+      else if(a==='R1'){ if(G.cur) sayWord(G.cur.w); }
+      else if(a==='L1'||a==='P1') usePower(0);
+      else if(a==='P2') usePower(1);
       else if(a==='start') pauseGame(true);
       break;
     case 'busy': if(a==='start') pauseGame(true); break;     // animations (dashes, finishers, banners...) can be paused too
@@ -253,6 +376,21 @@ document.addEventListener('visibilitychange',()=>{
   if(G.state==='play'||G.state==='busy'||G.state==='chest') pauseGame(true);
 });
 
+/* ---------------- phones: turn sideways, full screen ---------------- */
+$('rotateAnyway').addEventListener('click',()=>{ document.documentElement.classList.add('portrait-ok'); applyResScale(); });
+const rotateShown=()=>getComputedStyle($('rotate')).display!=='none';
+window.addEventListener('resize',()=>{ if(rotateShown()&&(G.state==='play'||G.state==='busy'||G.state==='chest')) pauseGame(true); });   // turned upright mid-game: wait
+const canFull=!!(document.fullscreenEnabled||document.webkitFullscreenEnabled);       // (not on iPhone: there "Add to Home Screen" gives full screen)
+if(canFull) $('mbFull').style.display='';
+function toggleFullscreen(){
+  const d=document, el=d.documentElement;
+  try{
+    if(d.fullscreenElement||d.webkitFullscreenElement){ (d.exitFullscreen||d.webkitExitFullscreen).call(d); return; }
+    const p=(el.requestFullscreen||el.webkitRequestFullscreen).call(el,{navigationUI:'hide'});
+    if(p&&p.then) p.then(()=>{ try{ screen.orientation.lock('landscape').catch(()=>{}); }catch(e){} }).catch(()=>{});
+  }catch(e){}
+}
+
 /* =====================================================================
    RESET & ERROR RECOVERY
    ===================================================================== */
@@ -269,7 +407,7 @@ function resetRigPose(rig){
   rig.j.body.position.set(0,0,0); rig.busy=false; rig.moving=false; rig.dashing=false; rig.cheer=false;
 }
 function hideRunUi(){
-  ['banner','sticker','callout'].forEach(id=>$(id).classList.remove('show')); $('prompt').style.display='none'; $('flash').style.opacity=0;
+  ['banner','sticker','callout'].forEach(id=>$(id).classList.remove('show')); $('prompt').style.display='none'; $('flash').style.opacity=0; setTag('');
   stopTimer();
   document.querySelectorAll('.popt,.fly,.cdot').forEach(e=>e.remove());
 }
@@ -283,6 +421,7 @@ function resetToSelect(){
   sweepScene();
   G.boss=null; G.chest=null; G.cur=null; G.rec=null; G.rig=null; G.lock=true; G.sumDone=null; G.wordDone=false; G.again={};
   G.combo=0; setCombo(); G.shake=0; camPunch=0; G.hover=-1; G.pool=[]; G.results=[]; G.lives=LIVES_PER_BOSS; G.blanks=[];
+  G.practice=false; G.practiceList=[]; G.power=0; G.items=[]; G.shield=false; G.mission=null; G.wmode=null; G.peek=false; $('bossbox').classList.remove('rage');
   hideRunUi(); $('hud').style.display='';
   G.rigs.forEach(r=>{ resetRigPose(r); r.root.rotation.y=PI; r.root.scaling.setAll(1); });
   setEmit(aura,0); setEmit(streak,0);
@@ -304,14 +443,15 @@ async function retryWord(){
   G.dummies.forEach(d=>{ try{ disposeDummy(d); }catch(e){} }); G.dummies=[];
   resetRigPose(G.rig); hideRunUi();
   if(G.wordDone){ await nextWord(); return; }                      // the word was already finished: just carry on with the next one
-  G.idx=G.blanks[0]; G.wordMistakes=0; G.wrongRow=0; if(!G.rec) G.rec={w:G.cur.w,e:G.cur.e,miss:[]};
+  G.idx=G.blanks[0]; G.wordMistakes=0; G.wrongRow=0; G.peek=false; if(!G.rec) G.rec={w:G.cur.w,e:G.cur.e,miss:[],tricky:weakOf(G.cur.w)>=1};
   renderWord(); await spawnOptions();
 }
 
 /* =====================================================================
    GAME FLOW
    ===================================================================== */
-async function startRun(){
+async function startRun(practice){
+  G.practice=!!practice; G.practiceList=practice?trickyWords():[]; G.power=0; G.items=[]; G.shield=false; G.lastMission=null; renderPower();
   G.state='busy'; setScreens(null); document.body.classList.add('playing');
   G.rigs.forEach((r,i)=>{ r.cheer=false; r.pod.setEnabled(false); r.root.setEnabled(i===G.heroIdx); });
   G.rig=G.rigs[G.heroIdx]; const rig=G.rig; rig.root.position.set(0,0,0); rig.root.rotation.y=PI/2+.45; rig.root.scaling.setAll(1);
@@ -319,42 +459,72 @@ async function startRun(){
   await startLevel();
 }
 async function startLevel(){
-  G.state='play'; G.lock=true; G.bossHP=WORDS_PER_LEVEL; G.results=[]; G.lives=LIVES_PER_BOSS; renderLives(); stopTimer(); refreshStats();
+  G.state='play'; G.lock=true; G.bossHP=WORDS_PER_LEVEL; G.results=[]; G.lives=LIVES_PER_BOSS; G.livesLost=0; renderLives(); stopTimer(); refreshStats();
+  $('bossbox').classList.remove('rage'); G.mission=null; renderMission(); renderPower();
   pickLevelPlace();
   const mk=bossForLevel(G.level), rig0=G.rig; const boss=await mk();                   // a boss can be a .glb model, which loads asynchronously (the place can have its own order of bosses)
   if(!G.rig||G.rig!==rig0){ boss.dispose(); return; }                                  // the player went back to hero select while it was loading
   G.boss=boss; G.boss.root.position.set(G.rig.root.position.x+30,0,1.8);
   blob(G.boss.root,2.4).position.z=-.2; outlineNode(G.boss.root,.045); G.bossArrived=false;
   $('bossName').textContent=G.boss.name; renderHearts(); $('hud').style.display='block';
-  SFX.thud(); await banner(`Level ${G.level} boss!`,G.boss.name,2200);
+  SFX.thud(); await banner(G.practice?`🎯 Practice time - level ${G.level} boss!`:`Level ${G.level} boss!`,G.boss.name,2200);
+  pickMission(); const mc=$('mission'); mc.classList.remove('gain'); void mc.offsetWidth; mc.classList.add('gain'); SFX.swap();
   await nextWord();
 }
 /* ---- which word comes next: words the child struggles with come back more often ----
    save.weak[word] is a "needs practice" score (0-5): it goes up when the word had mistakes and down when it was spelled perfectly. */
 const weakOf=w=>save.weak[w]||0;
+/* the words this run plays: the ticked groups, or only the tricky words (🎯 practice run) */
+const playList=()=>G.practice&&G.practiceList.length?G.practiceList:WORDS;
 function buildPool(last){
-  const items=[]; WORDS.forEach(o=>{ const k=weakOf(o.w), copies=1+(k>=3?2:k>=1?1:0); for(let i=0;i<copies;i++) items.push(o); });   // weak words get 1-2 extra turns per round
+  const items=[]; playList().forEach(o=>{ const k=weakOf(o.w), copies=1+(k>=3?2:k>=1?1:0); for(let i=0;i<copies;i++) items.push(o); });   // weak words get 1-2 extra turns per round
   // draw the playing order one word at a time, never the same word as the one before (also not the one just played)
   // (a word whose copies would no longer fit between the other words is placed right away, so copies never end up bunched at the end)
+  // weighted draw: a tricky word (and a word never played yet) tends to come early in the round, so with many words ticked it is not left to the end
+  const weight=o=>1+weakOf(o.w)*1.5+((save.hist[o.w]||{}).n?0:.6);
+  const wpick=a=>{ let r=Math.random()*a.reduce((t,o)=>t+weight(o),0); for(const o of a){ r-=weight(o); if(r<=0) return o; } return a[a.length-1]; };
   const seq=[]; let prev=last;
   while(items.length){
     const cnt={}; items.forEach(o=>{ cnt[o.w]=(cnt[o.w]||0)+1; });
     const must=Object.keys(cnt).find(w=>w!==prev&&cnt[w]*2>items.length), ok=items.filter(o=>o.w!==prev);
-    const pick=rnd(must?items.filter(o=>o.w===must):(ok.length?ok:items));
+    const pick=must?rnd(items.filter(o=>o.w===must)):wpick(ok.length?ok:items);
     items.splice(items.indexOf(pick),1); seq.push(pick); prev=pick.w; }
   return seq.reverse();      // words are taken from the END of the pool, so the first word drawn must be last
 }
 /* after a word with mistakes: get it back in about 3 words' time (twice at most per run), so it is practised while it is fresh */
 function requeueWord(w){
-  if(WORDS.length<3||(G.again[w.w]||0)>=2) return;
+  if(playList().length<3||(G.again[w.w]||0)>=2) return;
   G.again[w.w]=(G.again[w.w]||0)+1;
   if(!G.pool.length) G.pool=buildPool(w.w);
   G.pool.splice(Math.max(0,G.pool.length-3),0,w);
 }
+/* the twist of a word: tricky words (and words coming back after a slip) are "look, cover, spell"; others can be golden,
+   flashed (from level 2) or a mystery word without its picture (from level 3, only words met before). See TWIST in settings.js. */
+function chooseWordMode(o){
+  if(weakOf(o.w)>=2||(G.again[o.w]||0)>0) return 'flash';
+  const r=Math.random(), seen=(save.hist[o.w]||{}).n>0;
+  if(r<TWIST.gold) return 'gold';
+  if(G.level>=2&&r<TWIST.gold+TWIST.flash) return 'flash';
+  if(G.level>=3&&seen&&r<TWIST.gold+TWIST.flash+TWIST.mystery) return 'mystery';
+  return null;
+}
 async function nextWord(){
   if(!G.pool.length) G.pool=buildPool(G.cur&&G.cur.w);
-  G.cur=G.pool.pop(); G.blanks=pickBlanks(G.cur.w); G.idx=G.blanks[0]; G.wordMistakes=0; G.wrongRow=0; G.wordDone=false; G.rec={w:G.cur.w,e:G.cur.e,miss:[]}; renderWord();
-  setTimeout(()=>sayWord(G.cur.w),250);
+  G.cur=G.pool.pop(); G.wmode=chooseWordMode(G.cur); G.blanks=pickBlanks(G.cur.w); G.idx=G.blanks[0]; G.wordMistakes=0; G.wrongRow=0; G.wordDone=false;
+  const tricky=weakOf(G.cur.w)>=1, back=(G.again[G.cur.w]||0)>0;
+  G.rec={w:G.cur.w,e:G.cur.e,miss:[],tricky,mode:G.wmode};
+  if(G.wmode==='flash'){                                   // look... cover... spell: the whole word is shown, then hidden
+    G.peek=true; renderWord(); setTag(tricky||back?'🎯 Tricky word - look carefully!':'👀 Look carefully...','flash'); SFX.peek();
+    setTimeout(()=>sayWord(G.cur.w),250);
+    const wd=G.cur; await wait(2600+G.cur.w.length*120); if(G.cur!==wd) return;
+    G.peek=false; renderWord(); setTag('🙈 Now spell it from memory!','flash'); SFX.whoosh();
+  } else {
+    G.peek=false; renderWord();
+    if(G.wmode==='gold'){ setTag('⭐ Golden word - double coins!','gold'); SFX.goldWord(); }
+    else if(G.wmode==='mystery'){ setTag('🙈 Mystery word - listen carefully! (+5 🪙)','mystery'); }
+    else setTag(tricky?'🎯 Tricky word':'',tricky?'flash':'');
+    setTimeout(()=>sayWord(G.cur.w),250);
+  }
   await spawnOptions();
 }
 /* the 4 letter choices: the right letter + the letters kids really mix it up with (see CONFUSABLE in settings.js) */
@@ -468,7 +638,7 @@ async function bossWins(){
 /* out of lives: the boss wins this round. Show the report (so the words can be practised), then back to hero select. */
 async function gameOver(){
   G.state='busy'; G.lock=true; stopTimer();
-  if(G.rec){ G.results.push(G.rec); G.rec=null; }          // the word you were on counts too...
+  if(G.rec){ recordWord(G.rec,false); G.results.push(G.rec); G.rec=null; }          // the word you were on counts too...
   if(G.cur){ save.weak[G.cur.w]=Math.min(5,weakOf(G.cur.w)+1); persist(); }       // ...and it goes on the "needs practice" list
   try{ await bossWins(); }catch(e){ console.warn('boss victory animation skipped:',e); }      // the report must always come, even if the animation fails
   SFX.skull(); await banner('Oh no!','The boss wins this time... 😈',2200);
@@ -476,12 +646,14 @@ async function gameOver(){
   resetToSelect();
 }
 async function correct(d){
-  const rig=G.rig; G.combo++; setCombo(); G.wrongRow=0; d.alive=false;
+  const quick=G.wrongRow===0&&G.think<=QUICK_TIME;       // first try, and fast
+  const rig=G.rig; G.combo++; setCombo(); G.wrongRow=0; d.alive=false; missionEvent('combo',G.combo); chargePower();
+  if(quick){ missionEvent('quick'); addCoins(1); popText('⚡ Quick!',d.root.position.add(V3(0,4.4,0)),'#9fe8ff'); }
   if(G.combo%5===0&&G.lives<LIVES_PER_BOSS){ G.lives++; renderLives(); popText('+1 💚',rig.root.position.add(V3(0,3.4,0)),'#2fbf80'); }     // every 5 right in a row wins a life back
   if(G.combo===3) callout('🔥 ON FIRE!'); else if(G.combo===5) callout('⚡ SUPER COMBO!','#ffe066'); else if(G.combo===8) callout('🌟 UNSTOPPABLE!','#9fe8ff');
   const mult=Math.min(G.combo,5); SFX.ding(G.idx); sayLetter(d.letter); SFX.coin();
   const from=toScreen(d.root.position.add(V3(0,3,0))); const slot=$('slot'+G.idx);
-  const coinFly=flyEl('🪙',from,$('coins'),900).then(()=>addCoins(mult));
+  const coinFly=flyEl(G.wmode==='gold'?'🌟':'🪙',from,$('coins'),900).then(()=>addCoins(mult*(G.wmode==='gold'?2:1)));
   const letterFly=flyEl(d.letter,from,slot,650);
   const fxPos=d.root.position.add(V3(0,2,0));
   burst(fxPos,{count:24,power:5,size:.45}); shock(d.root.position.add(V3(0,2,-.6)),{color:'#ffd23f',size:3.4,ms:420}); camPunch=.2;
@@ -492,7 +664,7 @@ async function correct(d){
   tween(300,k=>{ d.root.scaling.setAll(1+Math.sin(k*PI)*.3); d.root.rotation.y=k*PI*2; });
   others.forEach(o=>tween(300,k=>o.root.scaling.setAll(Math.max(.001,1-k)),E.in).then(()=>disposeDummy(o)));
   SFX.pop(); await letterFly;
-  const nb=G.blanks.find(b=>b>G.idx); G.idx=nb===undefined?G.cur.w.length:nb; renderWord();     // on to the next blank (letters that are already filled in are skipped)
+  const nb=G.blanks.find(b=>b>G.idx); G.justFilled=G.idx; G.idx=nb===undefined?G.cur.w.length:nb; renderWord();     // on to the next blank (letters that are already filled in are skipped)
   await wait(100); tween(260,k=>d.root.scaling.setAll(Math.max(.001,1-k)),E.in).then(()=>disposeDummy(d));
   if(G.idx>=G.cur.w.length){ await wordComplete(); return; }
   const wd=G.cur; wait(350).then(()=>{ if(G.cur===wd) remindWord(); });          // after the letter name: say the word again
@@ -526,22 +698,39 @@ async function finisher(rig,mega){
   powFx(bt); powerHit(bt,true); if(mega) confetti(bt,30);
   freeze(mega?210:110); camPunch=mega?1:.6; flash(mega?'#ffffff':'#fff6d8',mega?.55:.35);
 }
+/* per-word history: how often played / perfect, and which letter positions were missed (those are always blanks next time,
+   see pickBlanks). A position spelled right fades its miss count again. */
+function recordWord(rec,perfect){
+  const h=save.hist[rec.w]||(save.hist[rec.w]={n:0,ok:0,pos:{}}); h.n++; if(perfect) h.ok++;
+  const missed=new Set(rec.miss.map(m=>m.i));
+  missed.forEach(i=>{ h.pos[i]=Math.min(3,(h.pos[i]||0)+1); });
+  Object.keys(h.pos).forEach(i=>{ if(!missed.has(+i)&&G.blanks.includes(+i)&&--h.pos[i]<=0) delete h.pos[i]; });
+}
 async function wordComplete(){
-  const rig=G.rig, w=G.cur; const stars=G.wordMistakes===0?3:G.wordMistakes<=2?2:1;
-  if(G.rec){ G.results.push(G.rec); G.rec=null; }
-  G.wordDone=true;
+  const rig=G.rig, w=G.cur; const stars=G.wordMistakes===0?3:G.wordMistakes<=2?2:1, perfect=G.wordMistakes===0;
+  const missedAt=new Set(G.rec?G.rec.miss.map(m=>m.i):[]), fixed=!!(G.rec&&G.rec.tricky&&perfect), mode=G.wmode;
+  if(G.rec){ recordWord(G.rec,perfect); G.rec.fixed=fixed; G.results.push(G.rec); G.rec=null; }
+  G.wordDone=true; renderWord(); setTag('');
+  if(perfect) missionEvent('perfect'); if(fixed) missionEvent('tricky');
   // practice score: mistakes push it up (3+ mistakes count double), a perfect spelling lowers it again
   const wk=weakOf(w.w), nk=G.wordMistakes===0?Math.max(0,wk-1):Math.min(5,wk+(G.wordMistakes>=3?2:1));
   if(nk) save.weak[w.w]=nk; else delete save.weak[w.w];
   if(G.wordMistakes>0) requeueWord(w);
-  save.stickers[w.w]=Math.max(save.stickers[w.w]||0,stars); save.stars+=stars; addCoins(stars*3); persist();
-  SFX.fanfare(); setTimeout(()=>say(w.w,.75),200);
-  const st=$('sticker'); st.querySelector('.e').textContent=w.e; st.querySelector('.w').textContent=w.w;
-  st.querySelector('.s').textContent='⭐'.repeat(stars)+'☆'.repeat(3-stars); st.classList.add('show'); burst(rig.root.position.add(V3(0,2.5,0)),{count:50,power:8,size:.7});
+  save.stickers[w.w]=Math.max(save.stickers[w.w]||0,stars); save.stars+=stars; addCoins(stars*3*(mode==='gold'?2:1)+(mode==='mystery'?5:0)); persist();
+  SFX.fanfare(perfect);
+  const st=$('sticker'); st.querySelector('.e').textContent=w.e; st.querySelector('.w').textContent=fixed?'✨ Fixed it! ✨':w.w;
+  // after a slip: the word is spelled out, letter by letter, with the tricky letters in red (and said the same way), so the right spelling sticks
+  const sp=st.querySelector('.sp'); sp.innerHTML=perfect?'':[...w.w].map((ch,i)=>`<span class="${missedAt.has(i)?'bad':''}" style="--d:${.35+i*.38}s">${esc(ch)}</span>`).join('');
+  if(perfect) setTimeout(()=>say(fixed?w.w+'! You fixed it!':w.w,.75),200);
+  else setTimeout(()=>say(`${w.w}. ${[...w.w].map(c=>c.toUpperCase()).join(', ')}. ${w.w}.`,.7),200);
+  st.querySelector('.s').textContent='⭐'.repeat(stars)+'☆'.repeat(3-stars); st.classList.toggle('fixed',fixed); st.classList.add('show'); burst(rig.root.position.add(V3(0,2.5,0)),{count:50,power:8,size:.7});
   if(stars===3) confetti(rig.root.position.add(V3(0,2.5,0)),20);
-  rig.cheer=true; await wait(1500); rig.cheer=false; st.classList.remove('show'); await wait(250);
-  const mega=G.bossHP===1; await finisher(rig,mega); G.bossHP--; renderHearts(); await G.boss.hit(WORDS_PER_LEVEL-G.bossHP);
-  if(G.bossHP<=0){ await G.boss.defeat(); await showSummary(); await chestScene(); return; }
+  if(fixed){ SFX.perfect(); emojiBurst(rig.root.position.add(V3(0,3,0)),['✨','🎯','🌟'],{count:9,size:.7,power:5}); }
+  if(mode==='gold') emojiBurst(rig.root.position.add(V3(0,3,0)),['🌟','🪙'],{count:10,size:.7,power:6});
+  rig.cheer=true; await wait(perfect?1500:1700+w.w.length*380); rig.cheer=false; st.classList.remove('show'); await wait(250);
+  const mega=G.bossHP===1; await finisher(rig,mega); G.bossHP--; renderHearts(true); await G.boss.hit(WORDS_PER_LEVEL-G.bossHP);
+  if(G.bossHP<=0){ missionEvent('boss'); $('bossbox').classList.remove('rage'); await G.boss.defeat(); await showSummary(); await chestScene(); return; }
+  if(G.bossHP===1&&WORDS_PER_LEVEL>1){ $('bossbox').classList.add('rage'); callout('😡 LAST HEART - THE BOSS IS ANGRY!','#ff6b6b'); Music.stinger('rage'); }
   await dashTo(rig,rig.root.position.x+STEP,STEP*125); await nextWord();
 }
 
@@ -551,14 +740,16 @@ function showSummary(lost){
     const R=G.results, total=R.reduce((s,r)=>s+r.miss.length,0), perfect=R.filter(r=>!r.miss.length).length;
     $('sumTitle').textContent=lost?`💔 Level ${G.level} - out of lives!`:`📜 Level ${G.level} Spelling Report`;
     $('summary').querySelector('[data-act="A"]').textContent=lost?'🏠 Back to heroes':'🎁 Open the treasure!';
-    $('sumStats').innerHTML=`🌟 <b>${perfect}</b> perfect &nbsp;·&nbsp; 💀 <b>${total}</b> mistake${total===1?'':'s'}`;
+    const m=G.mission;
+    $('sumStats').innerHTML=`🌟 <b>${perfect}</b> perfect &nbsp;·&nbsp; 💀 <b>${total}</b> mistake${total===1?'':'s'}`+(m?` &nbsp;·&nbsp; 🎯 mission ${m.done?'<b>done ✅</b>':'not done'}`:'');
     $('sumList').innerHTML=R.map((r,ri)=>{
       const letters=[...r.w].map((ch,i)=>{ const bad=r.miss.filter(m=>m.i===i);
         return `<span class="lt${bad.length?' bad':''}">${esc(ch)}${bad.length?`<small>${bad.map(m=>esc(m.l)).join(' ')}</small>`:''}</span>`; }).join('');
-      const n=r.miss.length, skulls=n?(n>8?'💀 x'+n:'💀'.repeat(n)):'✅';
-      return `<div class="srow ${n?'wrong':'ok'}" style="--i:${ri}"><span class="em">${esc(r.e)}</span><span class="wd">${letters}</span><span class="sk">${skulls}</span></div>`; }).join('');
-    $('sumNote').textContent=lost?'Red letters = where you slipped (the small letters show what you picked, ⏰ = time ran out). Practise these and come back!'
-      :total?'Red letters = where you slipped (the small letters show what you picked, ⏰ = time ran out)':'WOW! Every word spelled perfectly!';
+      const n=r.miss.length, skulls=n?(n>8?'💀 x'+n:'💀'.repeat(n)):r.fixed?'✨ Fixed!':'✅';
+      return `<div class="srow ${n?'wrong':'ok'}${r.fixed?' fixed':''}" style="--i:${ri}"><span class="em">${r.tricky?'<i class="tk">🎯</i>':''}${esc(r.e)}</span><span class="wd">${letters}</span><span class="sk">${skulls}</span></div>`; }).join('');
+    const fixedN=R.filter(r=>r.fixed).length, toDo=[...new Set(R.filter(r=>r.miss.length).map(r=>r.w))];
+    $('sumNote').textContent=(fixedN?`✨ You fixed ${fixedN} tricky word${fixedN>1?'s':''}! `:'')+(lost?'Red letters = where you slipped (the small letters show what you picked, ⏰ = time ran out). Practise these and come back!'
+      :total?`Red letters = where you slipped (the small letters show what you picked, ⏰ = time ran out). 🎯 ${toDo.join(', ')} will come back soon for practice.`:'WOW! Every word spelled perfectly!');
     G.state='summary'; G.sumDone=res; setScreens('summary'); updateMenuLabels();
     if(lost){ setTimeout(()=>say('Good try! Let us practise these words, and try again.',.85),300); }
     else if(!total){ SFX.perfect(); setTimeout(()=>say('Perfect spelling! Amazing!',.9),300); }

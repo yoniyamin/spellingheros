@@ -41,7 +41,7 @@
   #livesbox{position:absolute;left:14px;top:64px;font-size:clamp(16px,2.2vw,30px);letter-spacing:2px;padding:2px 14px}
   #speak{pointer-events:auto;cursor:pointer;border:3px solid var(--deep);background:#fff;border-radius:50%;
          width:clamp(36px,4.4vw,54px);height:clamp(36px,4.4vw,54px);font-size:clamp(18px,2.4vw,28px)}
-  #combo{position:absolute;left:14px;top:124px;font-size:clamp(18px,2.6vw,34px);color:var(--accent);
+  #combo{position:absolute;left:14px;top:168px;font-size:clamp(18px,2.6vw,34px);color:var(--accent);
          text-shadow:0 3px 0 #fff;opacity:0;transition:opacity .2s}
   #hintbar{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);font-size:clamp(12px,1.5vw,20px);white-space:nowrap}
   #pad{position:fixed;left:12px;bottom:12px;z-index:30;font-size:13px;padding:4px 10px;opacity:.9}
@@ -52,6 +52,48 @@
   #sticker.show{transform:translate(-50%,-50%) scale(1)}
   #sticker .e{font-size:clamp(50px,9vw,110px)}#sticker .w{font-size:clamp(24px,4vw,46px)}
   #sticker .s{font-size:clamp(26px,4vw,48px);color:#ffb300;text-shadow:0 2px 0 #fff}
+  /* after a slip the word is spelled out letter by letter, the tricky letters in red */
+  #sticker .sp{display:flex;gap:6px;justify-content:center;font-size:clamp(28px,4.6vw,56px)}
+  #sticker .sp:empty{display:none}
+  #sticker .sp span{display:inline-block;min-width:.7em;border-bottom:5px solid #4be3a0;opacity:0;animation:spIn .35s var(--d) forwards}
+  #sticker .sp span.bad{color:var(--accent);border-color:var(--accent);background:rgba(224,36,47,.1);border-radius:8px 8px 0 0}
+  @keyframes spIn{0%{opacity:0;transform:translateY(-20px) scale(.4)}60%{opacity:1;transform:translateY(4px) scale(1.25)}100%{opacity:1;transform:none}}
+  #sticker.fixed{border-color:#4be3a0;background:#effff6}
+  #sticker.fixed .w{color:#1f9a66}
+
+  /* word twists: a tag under the word box, golden word, "look" (the whole word shown for a moment) */
+  #wtag{position:absolute;left:50%;top:calc(100% + 28px);transform:translateX(-50%) scale(.5);opacity:0;white-space:nowrap;
+        background:#fff;border:3px solid var(--deep);border-radius:999px;padding:2px 14px;font-size:clamp(13px,1.7vw,21px);
+        transition:transform .3s cubic-bezier(.3,1.6,.5,1),opacity .2s;box-shadow:0 4px 0 rgba(60,64,140,.25)}
+  #wtag.show{opacity:1;transform:translateX(-50%) scale(1)}
+  #wtag.gold{border-color:#e0a800;background:#fff6c8;color:#9a6a00}
+  #wtag.flash{border-color:#ff8fd0;background:#fff0f8}
+  #wtag.mystery{border-color:#9b6bff;background:#f3edff}
+  #wordbox.gold{border-color:#e0a800;background:linear-gradient(135deg,#fff8d6,#ffe98a 50%,#fff8d6);box-shadow:0 0 22px rgba(255,200,0,.75),0 8px 0 rgba(160,110,0,.3)}
+  .slot.peek{border-color:#ff8fd0;color:#c2187a;animation:peek 2.6s ease-in-out forwards}
+  @keyframes peek{0%{transform:scale(.4);opacity:0}12%{transform:scale(1.12);opacity:1}25%{transform:scale(1)}85%{opacity:1}100%{opacity:.25}}
+
+  /* power meter + power-ups (right), mission (left) */
+  #powerbox{position:absolute;right:14px;top:96px;text-align:center;padding:4px 10px;font-size:clamp(12px,1.4vw,18px)}
+  #pmeter{display:flex;gap:3px;align-items:center;justify-content:center}
+  #pmeter i{display:block;width:clamp(9px,1.1vw,14px);height:clamp(14px,1.8vw,22px);border-radius:4px;background:#dfe1f7;border:2px solid var(--lav)}
+  #pmeter i.on{background:linear-gradient(#fff36b,#ffb300);border-color:#e0a800;box-shadow:0 0 6px #ffd23f}
+  #pmeter b{margin-left:3px}
+  #pitems{display:flex;gap:6px;justify-content:center;margin-top:4px;min-height:1.9em}
+  .pw{pointer-events:auto;cursor:pointer;position:relative;background:#fff;border:3px solid var(--deep);border-radius:12px;font-size:clamp(18px,2.2vw,28px);
+      width:1.9em;height:1.7em;line-height:1;animation:pulse 1.4s infinite}
+  .pw:hover{background:#ffe066}
+  .pw small{position:absolute;right:-6px;bottom:-6px;font-size:11px;background:var(--deep);color:#fff;border-radius:50%;width:16px;height:16px;line-height:16px}
+  .pw-none{opacity:.45;font-size:.8em;align-self:center}
+  #powerbox.gain,#mission.gain{animation:gain .7s}
+  @keyframes gain{0%{transform:scale(1)}30%{transform:scale(1.3) rotate(-3deg);box-shadow:0 0 30px #ffd23f}100%{transform:scale(1)}}
+  #mission{position:absolute;left:14px;top:112px;max-width:min(34vw,420px);font-size:clamp(12px,1.4vw,18px);padding:3px 12px;text-align:left}
+  #mission.done{border-color:#2fcf8a;background:rgba(228,255,239,.92)}
+  #mission.failed{opacity:.55}
+  #livesbox.shielded{border-color:#6ba3ff;box-shadow:0 0 14px #6ba3ff,0 6px 0 rgba(60,64,140,.25)}
+  #bossbox.rage{border-color:var(--accent);background:rgba(255,225,228,.9);animation:shk .5s infinite}
+  #select .playrow{margin:0;align-items:center}
+  .btn.practice{background:linear-gradient(#fff6c8,#ffe066);border-color:#e0a800}
 
   /* ---------- banners / floating ---------- */
   #banner{position:fixed;left:0;right:0;top:34%;z-index:25;text-align:center;pointer-events:none;opacity:0;
@@ -178,6 +220,27 @@
   .wchip .x{cursor:pointer;border:none;background:#ffe3e6;color:#e0242f;border-radius:50%;width:1.6em;height:1.6em;font-size:.75em}
   .wl-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;margin:6px 0;font-size:clamp(13px,1.6vw,20px)}
   .wl-row .lbl{margin-right:4px} #perN{min-width:1.6em;display:inline-block}
+  /* word groups: tick any number of them to play */
+  .wl-hint{font-size:clamp(12px,1.5vw,18px);font-weight:400;margin:-4px 0 8px}
+  .gl-list{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;margin-bottom:6px}
+  .gchip{display:inline-flex;align-items:stretch;background:#fff;border:3px solid var(--lav);border-radius:14px;overflow:hidden;font-size:clamp(13px,1.6vw,19px)}
+  .gchip.on{border-color:#2fcf8a;background:#e9fff3}
+  .gchip.sel{box-shadow:0 0 0 3px rgba(224,36,47,.35);border-color:var(--accent)}
+  .gchip.pack .gname{font-weight:700}
+  .gchip button{cursor:pointer;border:none;background:none;font:inherit;color:var(--ink)}
+  .gchip .tick{padding:3px 4px 3px 8px;font-size:1.05em}
+  .gchip .gname{padding:3px 10px 3px 4px}
+  .gchip .gname:hover{color:var(--accent)}
+  .gchip small{font-size:.75em;opacity:.7}
+  .wl-playing{font-size:clamp(13px,1.7vw,21px);margin:2px 0 8px;color:#1f9a66}
+  .gl-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin:4px 0 6px;font-size:clamp(15px,2vw,24px);
+           border-top:3px dashed var(--lav);padding-top:8px}
+  .gl-sub{font-size:.65em;font-weight:400;opacity:.75}
+  .wchip.weak{border-color:#ffb300;background:#fff8e1}
+  .tricky{background:#fff8e1;border:3px solid #ffd23f;border-radius:14px;padding:4px 10px}
+  .tricky:empty{display:none}
+  .tricky .tw{cursor:pointer;background:#fff;border-radius:999px;padding:1px 8px;border:2px solid #ffd23f}
+  .tricky .tw:hover{color:var(--accent)}
   /* picture picker ("More...") */
   .picker{display:none;background:#fff;border:3px solid var(--lav);border-radius:16px;padding:8px;margin:0 0 10px}
   .picker.show{display:block}
@@ -203,6 +266,107 @@
   .srow .lt small{position:absolute;left:50%;top:100%;transform:translateX(-50%);font-size:.46em;color:#a33;white-space:nowrap;text-decoration:line-through}
   .srow .sk{font-size:clamp(20px,3vw,36px);white-space:nowrap}
   .srow.wrong .wd{padding-bottom:10px}
+  .srow.fixed{border-color:#ffd23f;background:#fffbe6}
+  .srow .tk{font-style:normal;font-size:.55em;vertical-align:top}
   @keyframes rowIn{from{opacity:0;transform:translateX(-40px) scale(.9)}to{opacity:1;transform:none}}
   #pad{display:none}   /* the controller / mouse tip only shows on the title screen */
   body:has(#title.show) #pad{display:block}
+
+  /* ---------- motion polish ---------- */
+  .slot.just{animation:slotPop .45s cubic-bezier(.3,1.6,.5,1)}
+  @keyframes slotPop{0%{transform:scale(.3) translateY(-30px);color:#2fcf8a}60%{transform:scale(1.3)}100%{transform:scale(1.08)}}
+  #bossbox.hit{animation:bossHit .5s}
+  @keyframes bossHit{0%{transform:scale(1)}20%{transform:scale(1.15) rotate(-3deg);background:rgba(255,230,120,.95)}100%{transform:scale(1)}}
+  #hearts .lost{font-style:normal;display:inline-block;animation:heartLost .7s ease-out forwards}
+  @keyframes heartLost{0%{transform:scale(1.6)}40%{transform:scale(1.3) rotate(-12deg)}100%{transform:scale(1);opacity:.85}}
+  #timer i{transform-origin:left center;will-change:transform}
+
+  /* ---------- phones and tablets ---------- */
+  /* safe areas: the notch / Dynamic Island and the home bar (viewport-fit=cover in index.html) */
+  :root{--sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px);--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px)}
+  html,body{touch-action:manipulation;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-text-size-adjust:100%}
+  #stats,#livesbox,#mission,#combo{margin-left:var(--sl)}
+  #bossbox,#powerbox{margin-right:var(--sr)}
+  #stats,#bossbox,#wordbox,#menubar{margin-top:var(--st)}
+  #hintbar{margin-bottom:var(--sb)}
+  #pad{margin-left:var(--sl);margin-bottom:var(--sb)}
+  .screen{padding-left:var(--sl);padding-right:var(--sr)}
+  /* a blurred backdrop is re-computed every frame over the moving 3D scene: costly, mostly on phones. Over the game, plain chips. */
+  body.playing .chip,.touch .chip{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(244,245,255,.9)}
+  /* long words: the letter slots get narrower so the word box never runs into the corner chips */
+  .slot{width:max(18px,min(clamp(34px,5vw,64px),calc((100vw - 430px) / var(--n,5))));font-size:max(18px,min(clamp(32px,5vw,64px),calc((100vw - 430px) / var(--n,5))))}
+  /* touch screens: no hover effects (they stick after a tap), and no keyboard / controller help */
+  @media (hover:none){
+    .btn:hover,.mb:hover,.pk-e:hover{transform:none} .arrow:hover{background:#fff} .mb:hover{border-color:var(--lav)}
+    #select .keys.chip,#shop .keys,#pause .keys{display:none}
+  }
+
+  /* short screens: a phone held sideways (iPhone 14 / 16: 844 x 390, or less with Safari's bars) */
+  @media (max-height:500px){
+    #stats{left:8px;top:6px;font-size:13px;padding:3px 10px}
+    .hb{font-size:12px;padding:0 6px}
+    #livesbox{left:8px;top:40px;font-size:15px;padding:1px 10px}
+    #mission{left:8px;top:70px;font-size:11px;max-width:27vw;padding:2px 8px;border-width:2px}
+    #combo{left:8px;top:104px;font-size:17px}
+    #bossbox{right:8px;top:6px;font-size:10px;padding:3px 10px}
+    #hearts{font-size:14px;letter-spacing:1px}
+    #powerbox{right:8px;top:52px;padding:3px 8px}
+    #pmeter i{width:8px;height:12px;border-width:1px}
+    .pw{font-size:17px}
+    #wordbox{top:4px;padding:3px 12px;gap:8px;border-width:3px;border-radius:18px;box-shadow:0 5px 0 rgba(60,64,140,.25)}
+    #emoji{font-size:32px}
+    #blanks{gap:5px;padding-top:12px}
+    .slot{height:38px;border-bottom-width:4px;line-height:1.2;
+          width:max(16px,min(34px,calc((100vw - 400px) / var(--n,5))));font-size:max(16px,min(30px,calc((100vw - 400px) / var(--n,5))))}
+    .slot.cur{border-bottom-width:5px}
+    #speak{width:34px;height:34px;font-size:17px;border-width:2px}
+    #timer{bottom:-15px;height:9px;border-width:2px;left:16px;right:16px}
+    #wtag{top:calc(100% + 18px);font-size:12px;padding:1px 10px;border-width:2px}
+    #hintbar{font-size:11px;padding:3px 10px;bottom:6px}
+    .chip{border-width:2px;box-shadow:0 4px 0 rgba(60,64,140,.25)}
+    #sticker{padding:8px 22px;border-width:4px}
+    #sticker .e{font-size:44px} #sticker .w{font-size:24px} #sticker .sp{font-size:26px} #sticker .s{font-size:22px}
+    #banner b{font-size:min(6.4vw,44px)} #banner small{font-size:16px}
+    #callout{font-size:min(5.4vw,34px);top:24%}
+    .popt{font-size:28px}
+    #prompt{font-size:20px;bottom:16%}
+    /* menus */
+    #menubar{top:4px;gap:4px;padding:3px 6px;border-width:2px;border-radius:14px}
+    .mb{font-size:11px;padding:3px 8px;border-width:2px}
+    #select{padding-bottom:6px;gap:6px 8px;flex-direction:row;flex-wrap:wrap;align-content:flex-end;justify-content:center}
+    #select .top,#select .keys.chip{display:none}
+    #select .playrow{flex-basis:100%}
+    .hinfo{min-width:min(230px,34vw)} .pinfo{min-width:min(210px,30vw)}
+    .herochip{padding:4px 10px;gap:8px} #heroName{font-size:18px} #heroDesc{font-size:12px;margin-bottom:2px}
+    .arrow{width:34px;height:34px;font-size:15px} .arrow.sm{width:26px;height:26px;font-size:12px}
+    .placechip{padding:2px 10px} .pinfo{font-size:13px} #placeDesc{font-size:10px}
+    .btn.lg{font-size:20px;padding:4px 24px;border-radius:16px}
+    .btn{font-size:14px;padding:4px 12px;border-width:3px}
+    .panel{padding:8px 14px;border-width:4px;border-radius:20px;max-height:calc(100vh - 12px);overflow-y:auto}
+    .panel h2{font-size:19px;margin-bottom:4px}
+    .grid{gap:6px;margin:4px 0 6px} .item{min-width:0;padding:4px;font-size:11px;border-width:3px} .item .ic{font-size:24px}
+    .panel .grid{max-height:52vh}
+    .wl-list{max-height:30vh} .wl-add input{font-size:16px;padding:3px 8px;border-width:3px}
+    .gchip{font-size:12px} .wl-hint,.wl-playing{font-size:12px}
+    #sumList{max-height:48vh} .srow{padding:2px 10px;gap:10px} .srow .wd{font-size:24px} .srow .em{font-size:24px} .srow .sk{font-size:16px}
+    #reveal .big{font-size:64px} #reveal .nm{font-size:24px}
+    #title h1{font-size:min(11vw,72px)} #title .press{margin-top:14px;font-size:20px} #title .deco{font-size:28px}
+    #pad{font-size:11px}
+  }
+
+  /* a phone held upright: ask to turn it (the scene is wide). "Play like this anyway" adds .portrait-ok */
+  #rotate{display:none;position:fixed;inset:0;z-index:90;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;
+          text-align:center;background:linear-gradient(#b7bcf8,#6c72c4);color:#fff;font-size:24px;text-shadow:0 3px 0 var(--deep)}
+  #rotate .ph{font-size:84px;animation:turnPhone 2.4s ease-in-out infinite}
+  @keyframes turnPhone{0%,20%{transform:rotate(0)}45%,75%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
+  @media (orientation:portrait) and (max-width:600px){
+    html:not(.portrait-ok) #rotate{display:flex}
+    #wordbox{top:58px;max-width:96vw;padding:3px 10px;gap:6px}
+    #emoji{font-size:30px}
+    .slot{width:max(14px,min(34px,calc((100vw - 130px) / var(--n,5))));font-size:max(14px,min(30px,calc((100vw - 130px) / var(--n,5))));height:40px}
+    #mission,#hintbar{display:none}
+    #livesbox{top:auto;bottom:calc(10px + var(--sb))} #combo{top:auto;bottom:calc(56px + var(--sb))}
+    #powerbox{top:auto;bottom:calc(10px + var(--sb))}
+    #stats,#bossbox{font-size:12px}
+    #menubar{gap:4px} .mb{font-size:11px;padding:3px 7px}
+  }

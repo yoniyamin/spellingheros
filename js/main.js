@@ -21,7 +21,7 @@ scene.onBeforeRenderObservable.add(()=>{
   if((G.state==='play'||G.state==='busy'||G.state==='chest')&&!G.qualFixed){ fpsT+=dtr; fpsAcc+=dtr; fpsN++;
     if(fpsT>4000){ const fps=1000/(fpsAcc/fpsN); fpsT=0; fpsAcc=0; fpsN=0;
       if(fps<28){ goodWindows=0;
-        if(dynScale<1.29) setDynScale(dynScale*1.15);
+        if(dynScale<dynMax()-.01) setDynScale(dynScale*1.15);
         else if(QUAL!=='low'){ const nq=QUAL==='high'?'balanced':'low'; setQuality(nq); updateMenuLabels(); toast('Graphics set to '+QNAME[nq]+' for smoother play (press G to change)'); } }
       else if(fps>55&&dynScale>1){ if(++goodWindows>=3){ goodWindows=0; setDynScale(dynScale/1.15); } }
       else goodWindows=0; } }
@@ -30,12 +30,14 @@ scene.onBeforeRenderObservable.add(()=>{
   tickLetterTimer(dt);
   const sel=G.state==='select'||G.state==='shop'||G.state==='locker'||G.state==='title';
   G.rigs.forEach((r,i)=>{ if(!r.root.isEnabled()) return; updateRig(r,dt);
-    if(sel){ const hot=(G.state==='select'||G.state==='shop')&&i===G.heroIdx, tgt=hot?1.3:1, s=r.root.scaling.x+(tgt-r.root.scaling.x)*.2; r.root.scaling.setAll(s);
-      r.root.rotation.y+=((PI)-r.root.rotation.y)*.15; r.cheer=hot; }
+    if(sel){ const hot=(G.state==='select'||G.state==='shop')&&i===G.heroIdx, tgt=hot?1.3:1, s=r.root.scaling.x+(tgt-r.root.scaling.x)*lerpK(.2,dtr); r.root.scaling.setAll(s);
+      r.root.rotation.y+=((PI)-r.root.rotation.y)*lerpK(.15,dtr); r.cheer=hot; }
   });
   G.camX+=(((G.camTarget||0)-G.camX)*(1-Math.exp(-dt/320)));
-  G.shake*=.9; const sx=(Math.random()-.5)*G.shake, sy=(Math.random()-.5)*G.shake;
-  camera.position.set(G.camX+sx,2.7+sy,-12.2); camT.set(G.camX,1.8,0); camera.setTarget(camT);
+  // camera shake: smooth layered wobble that dies away (random jitter every frame looked like stutter, worst at high refresh rates)
+  G.shake*=Math.pow(.9,dtr/16.667); const st=G.t*1000/16.667, sh=G.shake*.5;
+  const sx=(Math.sin(st*1.31)+Math.sin(st*2.17+1.7)*.6)*sh*.62, sy=(Math.sin(st*1.73+.5)+Math.sin(st*2.71+2.3)*.6)*sh*.62;
+  camera.position.set(G.camX+sx,camY+sy,-camDist); camT.set(G.camX+sx*.3,LOOKY,0); camera.setTarget(camT);
   if(G.state==='play'||G.state==='chest'||G.state==='busy'){ if(G.rig) G.camTarget=G.rig.root.position.x+5.5; }
   SEGS.forEach(s=>{ if(s.position.x<G.camX-26) s.position.x+=SEGN*4; });
   dust.emitter.x=G.camX; petals.emitter.x=G.camX+2; floor.position.x=Math.round((G.camX+14)/4)*4; placeFollow(G.camX);
@@ -52,8 +54,9 @@ scene.onBeforeRenderObservable.add(()=>{
     if(b.baby) b.baby.position.y=Math.abs(Math.sin(G.t*6))*.45; }
   G.dummies.forEach(d=>{ if(!d.alive||!d.root) return; d.t+=dt/1000; if(!d.root.isDisposed()){ d.root.rotation.z=Math.sin(d.t*2.2)*.04;
       const hov=G.dummies[G.hover]===d&&!G.lock;
+      d.card.position.y=3.05+Math.sin(d.t*2.4)*.06;                                     // the signs float gently, each at its own pace
       if(d.hint){ const k=1+Math.sin(G.t*9)*.14+(hov?.1:0); d.card.scaling.set(k,k,k); }
-      else { const k0=d.card.scaling.x, k=k0+((hov?1.15:1)-k0)*.25; d.card.scaling.set(k,k,k); } } });
+      else { const k0=d.card.scaling.x, k=k0+((hov?1.15:1)-k0)*lerpK(.25,dtr); d.card.scaling.set(k,k,k); } } });
 });
 engine.runRenderLoop(()=>scene.render());
 

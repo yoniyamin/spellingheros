@@ -355,7 +355,7 @@ let PLACE=PLACES[0];
 const protoCache={};
 function buildProto(p,t){
   const parts=[], k=kit(m=>{ parts.push(m); return m; }); p.seg(t,k);
-  const merged=BABYLON.Mesh.MergeMeshes(parts,true,true,undefined,false,true); merged.isVisible=false; merged.isPickable=false; return keepNode(backdrop(merged));
+  const merged=mergeBaked(parts); merged.isVisible=false; merged.isPickable=false; return keepNode(backdrop(merged));    // (see mergeBaked in engine.js)
 }
 function placeProtos(p){                     // anything not prepared yet is built right now
   if(p.protos) return p.protos();

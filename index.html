@@ -3,8 +3,18 @@
 <head>
 <meta charset="utf-8">
 <title>Spelling Heroes</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="css/style.css">
+<!-- phones: full screen (under the notch too, see the safe-area padding in style.css), no pinch / double-tap zoom -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#aab0ea">
+<!-- "Add to Home Screen" on iPhone / Android opens the game full screen, without the browser bars -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Spelling Heroes">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/style.css?v=5">
 </head>
 <body>
 <canvas id="c" tabindex="0"></canvas>
@@ -14,11 +24,14 @@
     <button id="pauseBtn" class="hb" data-act="start" title="Pause">⏸</button></div>
   <div id="livesbox" class="chip" title="Your lives">💚💚💚</div>
   <div id="wordbox"><div id="emoji"></div><div id="blanks"></div><button id="speak" data-act="R1" title="Hear the word again">🔊</button>
-    <div id="timer"><i></i></div></div>
+    <div id="timer"><i></i></div><div id="wtag"></div></div>
   <div id="bossbox" class="chip"><div id="bossName"></div><div id="hearts"></div></div>
+  <div id="powerbox" class="chip" title="Every right letter charges the power meter. When it is full you win a power-up!">
+    <div id="pmeter"></div><div id="pitems"></div></div>
+  <div id="mission" class="chip"></div>
   <div id="combo"></div>
   <div id="hintbar" class="chip"></div>
-  <div id="sticker"><div class="e"></div><div class="w"></div><div class="s"></div></div>
+  <div id="sticker"><div class="e"></div><div class="w"></div><div class="sp"></div><div class="s"></div></div>
 </div>
 <div id="flash"></div><div id="toast"></div><div id="callout"></div>
 <div id="banner"><small></small><b></b></div>
@@ -40,6 +53,7 @@
     <button class="mb" data-act="music" id="mbMusic">🎵 Music: On</button>
     <button class="mb" data-act="timer" id="mbTimer">⏱️ Timer: On</button>
     <button class="mb" data-act="gfx" id="mbGfx">✨ Graphics</button>
+    <button class="mb" data-act="fullscreen" id="mbFull" style="display:none">⛶ Full screen</button>
   </div>
   <div class="top">Choose your hero!</div>
   <div class="chip herochip">
@@ -52,7 +66,8 @@
     <div class="pinfo"><div><span id="placeIcon"></span> <b id="placeName"></b></div><div id="placeDesc"></div></div>
     <button class="arrow sm" data-act="pright" title="next place">▶</button>
   </div>
-  <button class="btn lg go" data-act="A">▶ PLAY!</button>
+  <div class="btnrow playrow"><button class="btn lg go" data-act="A">▶ PLAY!</button>
+    <button class="btn practice" data-act="practice" id="practiceBtn" title="Play only the words that were tricky before">🎯 Tricky words</button></div>
   <div class="keys chip">◀ ▶ choose &nbsp;·&nbsp; ▲ ▼ place &nbsp;·&nbsp; <span class="b-x">✕</span> play &nbsp;·&nbsp; <span class="b-t">△</span> wardrobe &nbsp;·&nbsp; <span class="b-s">□</span> trophies &nbsp;·&nbsp; L1 words &nbsp;·&nbsp; or click the hero!</div>
 </div>
 
@@ -76,8 +91,12 @@
 
 <div id="words" class="screen">
   <div class="panel wide">
-    <h2>📝 My Spelling Words <span style="font-size:.55em">(<span id="wCount">0</span>)</span></h2>
-    <div class="wl-add">
+    <h2>📝 My Spelling Words</h2>
+    <div class="wl-hint">Tick ✅ the groups you want to play - as many as you like. Click a group's name to see or change its words.</div>
+    <div id="gList" class="gl-list"></div>
+    <div id="playing" class="wl-playing"></div>
+    <div id="gHead" class="gl-head"></div>
+    <div class="wl-add" id="wAdd">
       <input id="wIn" placeholder="Type a word - or many: cat, dog, sun" maxlength="300" autocomplete="off" spellcheck="false">
       <input id="eIn" placeholder="🙂" maxlength="8" title="Picture for the word (an emoji). Leave empty to pick one automatically.">
       <button class="btn" data-wact="more" title="Pick a picture from a list">🎨 More…</button>
@@ -90,11 +109,10 @@
       <div id="pkGrid"></div>
     </div>
     <div id="wList" class="wl-list"></div>
-    <div class="wl-row"><span class="lbl">Word packs:</span> <span id="packs"></span></div>
-    <div class="wl-row"><span class="lbl">Words per boss:</span> <button class="btn sm" data-wact="per-">−</button> <b id="perN">5</b> <button class="btn sm" data-wact="per+">+</button>
-      &nbsp; <button class="btn sm warn" data-wact="clear">🗑 Clear all</button></div>
+    <div id="tricky" class="wl-row tricky"></div>
+    <div class="wl-row"><span class="lbl">Words per boss:</span> <button class="btn sm" data-wact="per-">−</button> <b id="perN">5</b> <button class="btn sm" data-wact="per+">+</button></div>
     <div class="btnrow"><button class="btn lg go" data-act="B">✔ Done</button></div>
-    <div class="keys">Click a word to hear it · ✖ removes it · a word pack replaces the list</div>
+    <div class="keys">Click a word to hear it · ✖ removes it · 🎯 = a tricky word: it comes back more often until it is spelled right</div>
   </div>
 </div>
 
@@ -130,6 +148,10 @@
   </div>
 </div>
 
+<!-- a phone held upright: the game is played sideways -->
+<div id="rotate"><div class="ph">📱</div><div class="msg">Turn your phone sideways to play!</div>
+  <button class="btn sm" id="rotateAnyway">Play like this anyway</button></div>
+
 <div id="loadErr" style="display:none;position:fixed;inset:0;z-index:100;background:#aab0ea;color:#2d2f6b;text-align:center;padding:12vh 24px;font:700 clamp(18px,3vw,32px)/1.5 'Comic Sans MS','Trebuchet MS',Arial,sans-serif">
   <div style="font-size:3em">😴</div>
   <div>Spelling Heroes could not start.</div>
@@ -148,18 +170,18 @@
   window.addEventListener('load',function(){ if(!window.__ready) window.__showLoadError(); });
 </script>
 <!-- load order matters: the files share one global scope -->
-<script src="js/settings.js"></script>
-<script src="js/audio.js"></script>
-<script src="js/engine.js"></script>
-<script src="js/tween.js"></script>
-<script src="js/fx.js"></script>
-<script src="js/finishers.js"></script>
-<script src="js/corridor.js"></script>
-<script src="js/places.js"></script>
-<script src="js/rig.js"></script>
-<script src="js/targets.js"></script>
-<script src="js/input.js"></script>
-<script src="js/game.js"></script>
-<script src="js/main.js"></script>
+<script src="js/settings.js?v=5"></script>
+<script src="js/audio.js?v=5"></script>
+<script src="js/engine.js?v=5"></script>
+<script src="js/tween.js?v=5"></script>
+<script src="js/fx.js?v=5"></script>
+<script src="js/finishers.js?v=5"></script>
+<script src="js/corridor.js?v=5"></script>
+<script src="js/places.js?v=5"></script>
+<script src="js/rig.js?v=5"></script>
+<script src="js/targets.js?v=5"></script>
+<script src="js/input.js?v=5"></script>
+<script src="js/game.js?v=5"></script>
+<script src="js/main.js?v=5"></script>
 </body>
 </html>
